@@ -13,7 +13,7 @@
 //
 // Original Author:  Martin Weber
 //         Created:  Thu Mar 20 21:07:21 CET 2008
-// $Id: Weber.cc,v 1.1 2008/05/20 07:20:46 mweber Exp $
+// $Id: Weber.cc,v 1.1 2008/05/20 07:34:20 mweber Exp $
 //
 //
 
@@ -34,7 +34,7 @@ using namespace std;
 #include "FWCore/Framework/interface/MakerMacros.h"
 
 #include "FWCore/ParameterSet/interface/ParameterSet.h"
-
+#include "FWCore/ParameterSet/interface/InputTag.h"
  
 #include "DataFormats/TrackReco/interface/Track.h"
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
@@ -73,6 +73,9 @@ private:
   TH2F * hxz;
   TH2F * hhits;
   TFile * myFile;
+
+  // ---------configuration----------------------------
+  const edm::InputTag inputTag_;
 };
 
 //
@@ -86,10 +89,11 @@ private:
 //
 // constructors and destructor
 //
-Weber::Weber(const edm::ParameterSet& iConfig)
-
+Weber::Weber(const edm::ParameterSet& iConfig) :
+  inputTag_ ( iConfig.getParameter<edm::InputTag>("src") )
 {
-   //now do what ever initialization is needed
+
+  // now do what ever initialization is needed
   myFile = new TFile("histo.root", "RECREATE");
   hfx = new TH1F("hfx", "x", 100, -120, 120);
   hfy = new TH1F("hfy", "y", 100, -120, 120);
@@ -151,7 +155,7 @@ Weber::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
    using reco::TrackCollection;
 
    Handle<TrackCollection> tracks;
-   iEvent.getByLabel("ctfWithMaterialTracksBeamHaloMuon",tracks);
+   iEvent.getByLabel(inputTag_,tracks);
    for(TrackCollection::const_iterator itTrack = tracks->begin();
        itTrack != tracks->end();
        ++itTrack) {
