@@ -92,6 +92,7 @@ def submit(job):
         outputFile = job.name + '_' + str(n) + '.root'
         repMap["outputfile"] = outputFile
         repMap["type"] = job.filetype
+        repMap["configPath"] = cfgPath
         content = cfg % repMap
 
         # create a job configuration file
@@ -108,7 +109,7 @@ def submit(job):
         arguments = cfgFileNameBase
         # need to go into this directory - submit job from there
         os.chdir(myDir)
-        inbox = cfgFileName
+        inbox = cfgFileName #",".join((cfgFileName, "Weight3D.root"))
         outbox = outputFile # ",".join((outputFile, "Weight3D.root"))
         submit_condor_with_wrapper(executable, cfgFileNameBase,
                                    inbox, outbox, jobName)
@@ -126,6 +127,8 @@ def make_dirs():
                   + myEnv.GetValue("period." + str(i) + ".name", "."))
 
 
+######################################################################
+# main
 def main():
     usage = "usage: %prog [options] selection job | all"
     optParser = optparse.OptionParser(usage)

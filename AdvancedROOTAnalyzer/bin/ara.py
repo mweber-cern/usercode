@@ -10,6 +10,11 @@ import ConfigParser
 import subprocess
 
 ######################################################################
+# sanity check for environment setting
+if os.environ["ARASYS"] == '':
+    raise "You must have setup your Advanced ROOT Analyzer by sourcing bin/setup.sh"
+
+######################################################################
 # global variables keeping options and configuration
 global configFileName
 configFileName = os.environ['ARASYS'] + ("/config/ara.cfg")
