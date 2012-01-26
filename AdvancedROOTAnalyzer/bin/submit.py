@@ -134,7 +134,7 @@ def main():
     optParser = optparse.OptionParser(usage)
     defaulttemplate="condor_template.cfg"
     defaultnjobs=20
-    defaultsplit=100
+    defaultsplit=1000
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
                          default=ara.configFileName)
@@ -153,6 +153,9 @@ def main():
     if len(args) != 2:
         optParser.print_help()
         return 1
+
+    if os.environ['CMSSW_BASE'] == '':
+        raise "You must setup correct CMSSW version for AdvancedROOTAnalyzer to work"
 
     # get number of splits
     try:

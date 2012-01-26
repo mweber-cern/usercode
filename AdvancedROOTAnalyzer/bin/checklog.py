@@ -5,24 +5,27 @@
 
 import os,sys
 import optparse
-import ac3ana
+import ara
 
 def main():
     optParser = optparse.OptionParser()
-    defaultconfig=os.path.expanduser("~/.ac3ana")
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
-                         default=defaultconfig)
+                         default=ara.configFileName)
     (options, args) = optParser.parse_args()
     if len(args) < 1:
         optParser.print_help()
         return 1
 
-    ac3ana.config.read(options.cfgfile)
+    ara.config.read(options.cfgfile)
+
+    errors = [ "exception", "segmentation", "error", "err:" ]
+    warnings = [ "warning", "wrn" ]
+    requirements = [ "End executing" ]
 
     # check log files on command line
     for arg in args:
-        if not ac3ana.check_log(arg):
+        if not ara.check_log(arg, errors, warnings, requirements):
             return 1
 
     return 0

@@ -14,6 +14,7 @@ def check(job):
     global options
     global myEnv
 
+    success = True
     print "Checking job", job.name
     good = True
     basedir = myEnv.GetValue("basedir", ".");
@@ -28,11 +29,11 @@ def check(job):
         if job.name in filename:
             if "stdout.log" in filename:
                 if not ara.check_log(myDir+'/'+filename, errors, warnings, requirements):
-                    return False
+                    success = False
             if "stderr.log" in filename:
                 if not ara.check_log(myDir+'/'+filename, errors, warnings, None):
-                    return False                
-    return True
+                    success = False
+    return success
 
 def join(job):
     global options
@@ -95,6 +96,9 @@ def main():
     if len(args) != 2:
         optParser.print_help()
         return 1
+
+    if os.environ['CMSSW_BASE'] == '':
+        raise "You must setup correct CMSSW version for AdvancedROOTAnalyzer to work"
 
     # setup local arguments
     options.selection = args[0]
