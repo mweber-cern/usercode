@@ -436,14 +436,14 @@ void MakeCanvas2(Int_t dy, Double_t percent = 0.8)
   // make subpads and activate first pad
   gPadNr = 0;
   Double_t ysize = 0.99/dy;
-  char name[14];
+  char name[20];
   for (Int_t i = 0; i < dy; i++) {
-    sprintf(name, "gCanvas_%d", i+1);
+    snprintf(name, 20, "gCanvas_%d", i+1);
     TPad * pad = new TPad(name, name, 0.001, 1-(i+1)*ysize, percent-0.01, 1-i*ysize,
 			  999);
     pad->SetNumber(i+1);
     pad->Draw();
-    sprintf(name, "gCanvas_%d", 10*(i+1));
+    snprintf(name, 20, "gCanvas_%d", 10*(i+1));
     pad = new TPad(name, name, percent, 1-(i+1)*ysize, 0.99, 1-i*ysize, 999);
     pad->SetNumber(10*(i+1));
     pad->Draw();
@@ -498,7 +498,7 @@ void bottom()
 const char * getpath(Int_t period)
 {
   static char fpath[400];
-  sprintf(fpath, "%s/%s/%s", gBase, gSubDir, gPeriod[period]);
+  snprintf(fpath, 400, "%s/%s/%s", gBase, gSubDir, gPeriod[period]);
   return fpath;
 }
 
@@ -659,10 +659,12 @@ const char * GetXTitle(const TH1D * histo)
 
 const char * GetYTitle(const TH1D * histo)
 {
+  const int max_size = 4096;
   // create new string containing only y title of histogram name
   static char * title = 0;  // the y-title
   DEBUG("GetYTitle() start");
   if (title) {
+    DEBUG("deleting title " << title);
     delete[] title;
     title = 0;
   }
@@ -673,27 +675,35 @@ const char * GetYTitle(const TH1D * histo)
   const char * unit = GetUnit(histo->GetTitle());
 
   if (pos == 0) {
+    DEBUG("no y title given");
+    // check if bin names are given - in this case do not output bin width
+    if (histo->GetXaxis()->GetLabels() != 0) {
+      // assume these are just events
+      title = new char[max_size];
+      snprintf(title, max_size, "Number of events");
+      return title;
+    }
     // no y-title given
     Double_t binsize = histo->GetBinWidth(1);
     // unit given
     if (unit) {
       if (gGerman) {
-	title = new char[26+strlen(unit)];
-	sprintf(title, "Anzahl Ereignisse / %4.2f %s", binsize, unit);
+	title = new char[max_size];
+	snprintf(title, max_size, "Anzahl Ereignisse / %4.2f %s", binsize, unit);
       }
       else {
-	title = new char[25+strlen(unit)];
-	sprintf(title, "Number of events / %4.2f %s", binsize, unit);
+	title = new char[max_size];
+	snprintf(title, max_size, "Number of events / %4.2f %s", binsize, unit);
       }
     }
     else {
       if (gGerman) {
-	title = new char[26];
-	sprintf(title, "Anzahl Ereignisse / %4.2f", binsize);
+	title = new char[max_size];
+	snprintf(title, max_size, "Anzahl Ereignisse / %4.2f", binsize);
       }
       else {
-	title = new char[25];
-	sprintf(title, "Number of events / %4.2f", binsize);
+	title = new char[max_size];
+	snprintf(title, max_size, "Number of events / %4.2f", binsize);
       }
     }
   }
@@ -708,15 +718,15 @@ const char * GetYTitle(const TH1D * histo)
   return title;
 }
 
-Double_t GetOpt(Int_t ene, const char * hname, const char * MinMax)
+Double_t GetOpt(Int_t period, const char * hname, const char * MinMax)
 {
   // get option value with suffix MinMax from histogram hname
-  if (!gCuts[ene]) {
+  if (!gCuts[period]) {
     ERROR("option file not present, return default " << gOptDefault);
   }
   char optname[256];
   // get value
-  sprintf(optname, "%s%s", hname+2, MinMax);
+  snprintf(optname, 256, "%s%s", hname+2, MinMax);
   Double_t value = gCuts[gStart]->GetValue(optname, gOptDefault);
   if (value == gOptDefault) {
     ERROR("Option " << optname << " not found, return default " << gOptDefault);
@@ -724,16 +734,16 @@ Double_t GetOpt(Int_t ene, const char * hname, const char * MinMax)
   return value;
 }
 
-Double_t GetOptMin(Int_t ene, const char * hname)
+Double_t GetOptMin(Int_t period, const char * hname)
 {
-  // get minimum value from option file for energy gPeriod[gStart]
-  return GetOpt(ene, hname, "Min");
+  // get minimum value from option file for period gPeriod[gStart]
+  return GetOpt(period, hname, "Min");
 }
 
-Double_t GetOptMax(Int_t ene, const char * hname)
+Double_t GetOptMax(Int_t period, const char * hname)
 {
-  // get maximum value from option file for energy gPeriod[gStart]
-  return GetOpt(ene, hname, "Max");
+  // get maximum value from option file for period gPeriod[gStart]
+  return GetOpt(period, hname, "Max");
 }
 
 TArrow * arrow(Double_t position, Int_t neighbourbins = 0)
@@ -797,9 +807,11 @@ void drawcut()
   if (hstart < 0)
     return;
   const char * t = gHisto[gPadNr][hstart]->GetName();
+  DEBUG("histo name: " << t);
   // only draw arrows for N-1 plots
   if (t[1] != 'n')
     return;
+  DEBUG("Getting values from options file");
   // get values from option file
   Double_t xmin   = GetOptMin(gStart, t);
   Double_t xmax   = GetOptMax(gStart, t);
@@ -812,7 +824,7 @@ void drawcut()
 
 void draw(Bool_t autotitle = kTRUE)
 {
-  DEBUG("start draw");
+  DEBUG("enter draw()");
 
   // draw the histograms in the canvas
   Bool_t first = kTRUE;   // needed for drawing first histogram without "same"
@@ -825,7 +837,7 @@ void draw(Bool_t autotitle = kTRUE)
   TH1D * histo;
   for (Int_t i = 0; i < gMaxProcess; i++) {
     Int_t process = gOrder[gPadNr][i];
-    LOG(10, "process " << process << "[" << gProcess[process].fname << "]");
+    LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
     histo = gHisto[gPadNr][process];
     if (histo == 0)
       continue;
@@ -912,6 +924,7 @@ void min(Double_t minimum)
 
 void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin)
 {
+  DEBUG("enter findbins");
   // returns the bin numbers to the corresponding x-axis values. If xlow==xup,
   // then the full range is returned
 
@@ -936,6 +949,7 @@ void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin)
 
 void findmax(Double_t low = 0, Double_t up = 0)
 {
+  DEBUG("enter findmax()");
   // find maximum by iterating over all histograms and counting bin content
 
   // convert x-axis range to bin range
@@ -958,6 +972,7 @@ void findmax(Double_t low = 0, Double_t up = 0)
 
 void findmin(Double_t low = 0, Double_t up = 0)
 {
+  DEBUG("enter findmin()");
   // find minimum by iterating over all histograms and counting bin content
 
   // if normal axis, set minimum to zero
@@ -1090,15 +1105,15 @@ void print(const char * hname = 0)
     TH1D * h1 = gHisto[gPadNr][0];
     if (h1)
       if (gStart != gEnd)
-	sprintf(fpath, "%s-%s-%s.pdf",
+	snprintf(fpath, 256, "%s-%s-%s.pdf",
 		h1->GetName(), gPeriod[gStart], gPeriod[gEnd]);
       else
-	sprintf(fpath, "%s-%s.pdf", h1->GetName(), gPeriod[gStart]);
+	snprintf(fpath, 256, "%s-%s.pdf", h1->GetName(), gPeriod[gStart]);
     else
-      sprintf(fpath, "%s.pdf", "unknown");
+      snprintf(fpath, 256, "%s.pdf", "unknown");
   }
   else
-    sprintf(fpath, "%s", hname);
+    snprintf(fpath, 256, "%s", hname);
 
   gCanvas->Print(fpath);
 }
@@ -1115,15 +1130,15 @@ void pprint(const char * hname = 0)
     TH1D * h1 = gHisto[gPadNr][0];
     if (h1)
       if (gStart != gEnd)
-	sprintf(fpath, "%s-%s-%s.pdf",
+	snprintf(fpath, 256, "%s-%s-%s.pdf",
 		h1->GetName(), gPeriod[gStart], gPeriod[gEnd]);
       else
-	sprintf(fpath, "%s-%s.pdf", h1->GetName(), gPeriod[gStart]);
+	snprintf(fpath, 256, "%s-%s.pdf", h1->GetName(), gPeriod[gStart]);
     else
-      sprintf(fpath, "%s.pdf", "unknown");
+      snprintf(fpath, 256, "%s.pdf", "unknown");
   }
   else
-    sprintf(fpath, "%s", hname);
+    snprintf(fpath, 256, "%s", hname);
 
   gPad->Print(fpath);
 }
@@ -1172,7 +1187,7 @@ void ascii(const char * fname = 0)
   if (fname) {
     // assemble path name
     char fpath[256];
-    sprintf(fpath, "%s/%s/%s.ascii", gBase, gSubDir, fname);
+    snprintf(fpath, 256, "%s/%s/%s.ascii", gBase, gSubDir, fname);
     // convert to lower case
     for (UInt_t i = 0; i < strlen(fpath); i++)
       fpath[i] = tolower(fpath[i]);
@@ -1227,10 +1242,10 @@ void drawperiod(Int_t posi = -1)
   static TLatex * t[gMaxPad] = { 0 };
   char etext[50];
   if (gStart != gEnd) {
-    sprintf(etext, "CMS %s - %s", gPeriod[gStart], gPeriod[gEnd]);
+    snprintf(etext, 50, "CMS %s - %s", gPeriod[gStart], gPeriod[gEnd]);
   }
   else {
-    sprintf(etext, "CMS %s", gPeriod[gStart]);
+    snprintf(etext, 50, "CMS %s", gPeriod[gStart]);
   }
 
   Int_t hstart = FindFirstHisto();
@@ -1444,17 +1459,20 @@ TH1D * addperiod(Int_t process, const char * hname,
 
   for (Int_t period = gStart; period <= gEnd; period++) {
     // open file
-    sprintf(fpath, "%s/%s.root", getpath(period), gProcess[process].fname);
+    snprintf(fpath, 400, "%s/%s.root", getpath(period), gProcess[process].fname);
     LOG(5, "Opening file " << fpath);
     TFile * f = TFile::Open(fpath);
     if (f == 0 || !f->IsOpen()) {
       if (hadd)
 	delete hadd;
-	ERROR("Could not open file " << fpath);
+      ERROR("Could not open file " << fpath);
       return 0;
     }
     // get key from file
-    key = (TKey *) f->GetKey(hname);
+    char histname[strlen(hname)+4];
+    sprintf(histname, "h1_%s", hname);
+    key = (TKey *) f->GetKey(histname);
+    DEBUG("Histogram key = " << key);
     if (key == 0) {
       // key has not been found, generate histogram from tree
       // create specified histogram
@@ -1468,7 +1486,7 @@ TH1D * addperiod(Int_t process, const char * hname,
 	continue;
       }
       // save tree data in my histogram
-      sprintf(mname, "%s>>hmine", hname);
+      snprintf(mname, 400, "%s>>hmine", hname);
       Int_t result = dtree->Draw(mname, selection, "goff");
       if (result < 0) {
 	ERROR("Variable not found in tree");
@@ -1487,7 +1505,7 @@ TH1D * addperiod(Int_t process, const char * hname,
 	delete f;
 	return 0;
       }
-      htemp = (TH1D * ) f->Get(hname);
+      htemp = (TH1D * ) f->Get(histname);
     }
     // check physical minimum
     if (htemp->GetMinimum() < 0) {
@@ -1525,6 +1543,7 @@ void print_order()
 
 void auto_order()
 {
+  DEBUG("Enter auto_order()");
   double integral[gMaxProcess];
   // order all but data
   for (Int_t i = 0; i < gMaxProcess-1; i++) {
@@ -1538,6 +1557,7 @@ void auto_order()
 
 void compose()
 {
+  DEBUG("enter compose");
   // sum up the histograms in the current order, such that they can be
   // drawn on the screen, one before the other
 
@@ -1678,14 +1698,17 @@ TH2D * addperiod2(Int_t process, const char * hname,
 
   for (Int_t period = gStart; period <= gEnd; period++) {
     // open file
-    sprintf(fpath, "%s/%s.root", getpath(period), gProcess[process].fname);
+    snprintf(fpath, 400, "%s/%s.root", getpath(period), gProcess[process].fname);
     TFile * f = new TFile(fpath, "READ");
     if (!f->IsOpen()) {
       ERROR("File " << fpath << " not found.");
       return 0;
     }
     // get key from file
-    key = (TKey *) f->GetKey(hname);
+    char histname[strlen(hname)+4];
+    sprintf(histname, "h2_%s", hname);
+    key = (TKey *) f->GetKey(histname);
+    DEBUG("Histogram key = " << key);
     if (key == 0) {
       // key has not been found, generate histogram from tree
       // create specified histogram
@@ -1706,7 +1729,7 @@ TH2D * addperiod2(Int_t process, const char * hname,
       htemp = new TH2D(*hsample);
       htemp->SetName("htemp");
       // save tree data in my histogram
-      sprintf(mname, "%s>>htemp", hname);
+      snprintf(mname, 100, "%s>>htemp", hname);
       dtree->Draw(mname, selection, "goff");
       htemp->SetTitle(hname);
       htemp->SetDirectory(0);
@@ -1717,7 +1740,7 @@ TH2D * addperiod2(Int_t process, const char * hname,
 	delete f;
 	return 0;
       }
-      htemp = (TH2D * ) f->Get(hname);
+      htemp = (TH2D * ) f->Get(histname);
     }
     // check physical minimum
     if (htemp->GetMinimum() < 0) {
