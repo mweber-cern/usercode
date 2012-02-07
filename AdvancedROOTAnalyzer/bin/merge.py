@@ -11,11 +11,10 @@ def merge(filelist, counter):
 def main():
     usage = "usage: %prog [options] number_of_files"
     optParser = optparse.OptionParser(usage)
-    defaultconfig=os.path.expanduser("~/.ac3ana")
     defaultdir="."
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
-                         default=defaultconfig)
+                         default=ara.defaultConfigFileName)
     optParser.add_option("-d", "--dir", dest="dir",
                          help="directory with ROOT files to merge",
                          default=defaultdir)

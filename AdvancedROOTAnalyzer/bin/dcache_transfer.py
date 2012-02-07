@@ -18,7 +18,7 @@ def main():
     optParser = optparse.OptionParser(usage)
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
-                         default=ara.configFileName)
+                         default=ara.defaultConfigFileName)
     optParser.add_option("-f", "--force-deletion", action="store_true", 
                          dest="forcedeletion",
                          help="force deletion of local files",

@@ -11,7 +11,7 @@ def main():
     optParser = optparse.OptionParser()
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
-                         default=ara.configFileName)
+                         default=ara.defaultConfigFileName)
     (options, args) = optParser.parse_args()
     if len(args) < 1:
         optParser.print_help()

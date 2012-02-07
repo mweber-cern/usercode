@@ -6,7 +6,19 @@ import optparse
 import ara
 import getpass
 import time
-from ROOT import TEnv
+import shutil
+
+######################################################################
+# misc helper functions
+def getType(job):
+    if "data" in job:
+        return "data"
+    elif "signal" in job:
+        return "signal"
+    elif "background" in job:
+        return "background"
+    else:
+        return "mc"
 
 ######################################################################
 # submitters
@@ -63,15 +75,13 @@ def submit_condor_with_wrapper(executable, arguments, inbox, outbox, jobname):
                       " ".join((executable, arguments)), 
                       inbox, outbox, jobname)
 
-def submit(job):
+def submit(job, period):
     global options
-    global myEnv
 
     # read files from directory
     # call program and record both stderr and stdout
-#    filelist = subprocess.check_output(['ls', os.path.abspath(job.directory + '/*.root')])
     filespecs = []
-    for thisdir in job.directory:
+    for thisdir in ara.config.get(period, job).split(','):
         filespec =  os.path.abspath(os.path.expanduser(thisdir)) + '/*.root'
         filespecs.append(filespec)
     filelist = ara.getCommandOutput2('ls ' + " ".join(filespecs))
@@ -89,23 +99,25 @@ def submit(job):
         cfg = cfgTemplateFile.read()
         repMap = {}
         repMap["inputfile"] = " ".join(files)
-        outputFile = job.name + '_' + str(n) + '.root'
+        outputFile = job + '_' + str(n) + '.root'
         repMap["outputfile"] = outputFile
-        repMap["type"] = job.filetype
+        repMap["type"] = getType(job)
         repMap["configPath"] = cfgPath
         content = cfg % repMap
 
         # create a job configuration file
-        basedir = myEnv.GetValue("basedir", ".");
-        myDir = basedir + '/' + options.selection + '/' + job.period
-        jobName = job.name + '_' + str(n)
-        cfgFileNameBase = job.name + '_' + str(n) + '.cfg'
+        basedir = ara.config.get('Analysis', 'basedir')
+        # create directory
+        myDir = basedir + '/' + options.selection + '/' + period
+        os.system("mkdir -p " + myDir)
+        jobName = job + '_' + str(n)
+        cfgFileNameBase = job + '_' + str(n) + '.cfg'
         cfgFileName = myDir + '/' + cfgFileNameBase
         cfgFile = open(cfgFileName, "w")
         cfgFile.write(content)
         cfgFile.close()
 
-        executable = os.environ['ARASYS'] + '/analyzer/ara'
+        executable = os.environ['ARASYS'] + '/bin/analyzer_' + options.selection
         arguments = cfgFileNameBase
         # need to go into this directory - submit job from there
         os.chdir(myDir)
@@ -117,27 +129,17 @@ def submit(job):
         # Next file
         n += 1
 
-def make_dirs():
-    global options
-    global myEnv
-
-    for i in xrange(myEnv.GetValue("N_period", 1)):
-        os.system("mkdir -p " + myEnv.GetValue("basedir", ".") + '/'
-                  + options.selection + '/'
-                  + myEnv.GetValue("period." + str(i) + ".name", "."))
-
-
 ######################################################################
 # main
 def main():
-    usage = "usage: %prog [options] selection job | all"
+    usage = "usage: %prog [options] selection [joblist]"
     optParser = optparse.OptionParser(usage)
     defaulttemplate="condor_template.cfg"
     defaultnjobs=20
     defaultsplit=1000
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
-                         default=ara.configFileName)
+                         default=ara.defaultConfigFileName)
     optParser.add_option("-t", "--template", dest="template",
                          help="condor template file",
                          default=defaulttemplate)
@@ -150,7 +152,7 @@ def main():
 
     global options
     (options, args) = optParser.parse_args()
-    if len(args) != 2:
+    if len(args) < 1 or len(args) > 2:
         optParser.print_help()
         return 1
 
@@ -180,26 +182,38 @@ def main():
         return 2
 
     options.selection = args[0]
-    options.job = args[1]
+    if len(args) == 2:
+        options.job = args[1]
+    else:
+        options.job = "default"
     options.njobs = njobs
     options.nsplit = nsplit
 
     # read global configuration file
     ara.config.read(options.cfgfile)
 
-    # read ROOT configuration file
-    configPath = os.environ['ARASYS'] + '/config'
-    global myEnv
-    myEnv = TEnv(configPath + '/' + ara.config.get('Analysis', 'configfile'))
-
-    # create directory if necessary
-    make_dirs()
-
     print "Starting job(s):", options.job
 
-    for job in ara.jobs:
-        if job.name == options.job or options.job == "all":
-            submit(job)
+    # copy executable in place
+    src = os.environ['ARASYS'] + '/analyzer/analyzer'
+    dest = os.environ['ARASYS'] + '/bin/analyzer_' + options.selection
+    shutil.copy(src, dest)
+
+    try:
+        # check if this is a job group
+        items = ara.config.items('Jobs:'+options.job)
+        # OK, is a job group, submit all jobs in job group
+        for (period, jobs) in items:
+            for job in jobs.split(','):
+                submit(job, period)
+    except ConfigParser.NoSectionError:
+        # OK, is not a job group, take default group
+        # and submit all jobs which contain options.job inside their name 
+        items = ara.config.items('Jobs:default')
+        for (period, jobs) in items:
+            for job in jobs.split(','):
+                if options.job in job:
+                    submit(job,period)
 
 if __name__ == "__main__":
     sys.exit(main())

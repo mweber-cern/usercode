@@ -1,24 +1,22 @@
 #!/bin/env python
 import os
 import sys
+import ConfigParser
 import stat
 import optparse
 import ara
-from ROOT import TEnv
 
 ######################################################################
 # functions
 
-def check(job):
+def check(job, period):
     """Check log files for errors and warnings"""
     global options
-    global myEnv
 
     success = True
-    print "Checking job", job.name
-    good = True
-    basedir = myEnv.GetValue("basedir", ".");
-    myDir = basedir + '/' + options.selection + '/' + job.period
+    print "Checking job", job
+    basedir = ara.config.get('Analysis', 'basedir')
+    myDir = basedir + '/' + options.selection + '/' + period
 
     errors = [ "exception", "segmentation", "error", "err:" ]
     warnings = [ "warning", "wrn" ]
@@ -26,25 +24,26 @@ def check(job):
     
     # List all log files
     for filename in os.listdir(myDir):
-        if job.name in filename:
+        if job in filename:
             if "stdout.log" in filename:
-                if not ara.check_log(myDir+'/'+filename, errors, warnings, requirements):
-                    success = False
+                success = ara.check_log(myDir+'/'+filename, errors, warnings, requirements)
+                if not success:
+                    return False
             if "stderr.log" in filename:
-                if not ara.check_log(myDir+'/'+filename, errors, warnings, None):
-                    success = False
-    return success
+                success = ara.check_log(myDir+'/'+filename, errors, warnings, None)
+                if not success:
+                    return False
+    return True
 
-def join(job):
+def join(job, period):
     global options
-    global myEnv
 
-    basedir = myEnv.GetValue("basedir", ".");
-    myDir = basedir + '/' + options.selection + '/' + job.period
+    basedir = ara.config.get('Analysis', 'basedir')
+    myDir = basedir + '/' + options.selection + '/' + period
     os.chdir(myDir)
     # input file
     try:
-        filelist = ara.getCommandOutput2('ls ' + myDir + '/' + job.name + '_*.root').splitlines()
+        filelist = ara.getCommandOutput2('ls ' + myDir + '/' + job + '_*.root').splitlines()
     except RuntimeError:
         print "ERROR: No result files found"
         return False
@@ -54,7 +53,7 @@ def join(job):
         file_stats = os.stat(inputFile)
         lastDate = max(file_stats[stat.ST_MTIME], file_stats[stat.ST_CTIME], lastDate)
     # output file
-    joinFile = myDir + '/' + job.name + ".root"
+    joinFile = myDir + '/' + job + ".root"
     joinDate = 0
     try:
         file_stats = os.stat(joinFile)
@@ -66,63 +65,82 @@ def join(job):
         return True
     # now join
     if isinstance (filelist, str):
-        os.system("hadd -f " + job.name + ".root " + " " + filelist)
+        os.system("hadd -f " + job + ".root " + " " + filelist)
     else:
-        os.system("hadd -f " + job.name + ".root " + " ".join(filelist))
+        os.system("hadd -f " + job + ".root " + " ".join(filelist))
     return True
 
-def rm(job):
+def rm(job, period):
     global options
-    global myEnv
 
-    basedir = myEnv.GetValue("basedir", ".");
-    myDir = basedir + '/' + options.selection + '/' + job.period
-    print "Removing output file", job.name + ".root"
-    os.system('rm -f ' + myDir + '/' + job.name + ".root")
+    basedir = ara.config.get('Analysis', 'basedir')
+    myDir = basedir + '/' + options.selection + '/' + period
+    print "Removing output file", job + ".root"
+    os.system('rm -f ' + myDir + '/' + job + ".root")
+
+def check_join(items, all=True):
+    errors = False
+    for (period, jobs) in items:
+        for job in jobs.split(','):
+            if all or options.job in job:
+                if check(job, period):
+                    if not join(job, period):
+                        errors = True
+                        rm(job, period)
+                else:
+                    errors = True
+                    rm(job, period)
+    return errors
 
 ######################################################################
 # main
 def main():
     global options
-    global myEnv
 
-    usage = "usage: %prog [options] selection job | all"
+    usage = "usage: %prog [options] selection [job]"
     optParser = optparse.OptionParser(usage)
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
-                         default=ara.configFileName)
+                         default=ara.defaultConfigFileName)
 
     (options, args) = optParser.parse_args()
-    if len(args) != 2:
+    if len(args) < 1 or len(args) > 2:
         optParser.print_help()
         return 1
 
-    if os.environ['CMSSW_BASE'] == '':
-        raise "You must setup correct CMSSW version for AdvancedROOTAnalyzer to work"
+    try:
+        CMSSW_BASE=os.environ['CMSSW_BASE']
+    except KeyError:
+        print("You must setup correct CMSSW version for AdvancedROOTAnalyzer to work")
+        return 1
 
     # setup local arguments
     options.selection = args[0]
-    options.job = args[1]
+    if len(args) == 2:
+        options.job = args[1]
+    else:
+        options.job = "default"
 
     # read global configuration file
     ara.config.read(options.cfgfile)
 
-    # read ROOT configuration file 
-    configPath = os.environ['ARASYS'] + '/config'
-    myEnv = TEnv(configPath + '/' + ara.config.get('Analysis', 'configfile'))
-
     print "Checking and joining job(s):", options.job
 
     errors = False
-    for job in ara.jobs:
-        if job.name == options.job or options.job == "all":
-            if check(job):
-                rc = join(job)
-                if not rc:
-                    errors = True
-            else:
-                errors = True
-                rm(job)
+    try:
+        # check if this is a job group
+        items = ara.config.items('Jobs:'+options.job)
+        # OK, is a job group, check all jobs in job group
+        errors = check_join(items, all=True)
+    except ConfigParser.NoSectionError:
+        # OK, is not a job group, take default group
+        # and check all jobs which contain options.job inside their name 
+        try:
+            items = ara.config.items('Jobs:default')
+            errors = check_join(items, all=False)
+        except ConfigParser.NoSectionError:
+            print "No [Jobs:default] section found in configuration file!"
+            errors = True
 
     if errors:
         print "*******************************************************************************"
