@@ -76,8 +76,8 @@ class TreeContent {
    Double_t        global_pthat;
    Double_t        global_bfield;
    Int_t           global_store;
-   UInt_t           global_run;
-   UInt_t           global_event;
+   UInt_t          global_run;
+   UInt_t          global_event;
    Int_t           global_bx;
    Int_t           global_orbit;
    Int_t           global_exp;

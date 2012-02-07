@@ -17,6 +17,8 @@
 using namespace std;
 using namespace ROOT;
 
+enum ErrorCodes { E_WRONG_PARAMS, E_OUTPUTFILE, E_NO_TREE, E_NO_ANALYSIS };
+
 int main(int argc, char *argv[])
 {
   // process and timing information
@@ -34,21 +36,21 @@ int main(int argc, char *argv[])
   INFO("");
   INFO("######################################################################");
   INFO("#                                                                    #");
-  INFO("# Start executing ara at " << asctime(timeinfo)		       );
+  INFO("# Start executing analyzer at " << asctime(timeinfo)		       );
   INFO("#                                                                    #");
   INFO("######################################################################");
   INFO("");
 
   // check command line arguments
   if (argc != 2) {
-    cout << "Usage: ara configfile " << endl;
-    exit(1);
+    cout << "Usage: analyzer input filetype outputfile configfile " << endl;
+    return E_WRONG_PARAMS;
   }
 
   // read configuration file
   TEnv cfgFile(argv[1]);
 
-  INFO("# ara: Using configuration file: " << argv[1]);
+  INFO("# analyzer: Using configuration file: " << argv[1]);
 
   // configure values from config file
   gLogLevel                           = cfgFile.GetValue("LogLevel", 3);
@@ -82,8 +84,11 @@ int main(int argc, char *argv[])
   delete basepath;
 
   // create output file
-  INFO("# ara: Creating output file and cloning tree")
+  INFO("# analyzer: Creating output file and cloning tree")
   TFile * outFile = new TFile(outputFileName, "RECREATE");
+  if (outFile == 0 || !outFile->IsOpen()) {
+    return E_OUTPUTFILE;
+  }
   outFile->mkdir("ACSkimAnalysis");
   outFile->cd("ACSkimAnalysis");
 
@@ -95,9 +100,11 @@ int main(int argc, char *argv[])
     INFO("Disabling branch(es) " << *str);
     chain->SetBranchStatus(str->c_str(), 0);
   }
-
   // clone tree structure, do not copy events...
   TTree * outTree = chain->CloneTree(0);
+  if (outTree == 0) {
+    return E_NO_TREE;
+  }
   // histograms belong to ROOT directory...
   outFile->cd();
   
@@ -108,24 +115,24 @@ int main(int argc, char *argv[])
   }
   CATCH;
   if (analysis == 0) {
-    exit(1);
+    return E_NO_ANALYSIS;
   }
 
   // mem info
   gSystem->GetProcInfo(&info);
-  INFO("# ara: resident mem (MB) : " << info.fMemResident/1000.);
-  INFO("# ara: virtual  mem (MB) : " << info.fMemVirtual/1000.);
+  INFO("# analyzer: resident mem (MB) : " << info.fMemResident/1000.);
+  INFO("# analyzer: virtual  mem (MB) : " << info.fMemVirtual/1000.);
 
   // start loop
-  INFO("# ara: starting event loop");
+  INFO("# analyzer: starting event loop");
   try {
     analysis->Loop();
   }
   CATCH;
-  INFO("# ara: end of loop ");
+  INFO("# analyzer: end of loop ");
 
   // save data in file
-  INFO("# ara: Saving data to file and closing...");
+  INFO("# analyzer: Saving data to file and closing...");
   // get currrent file - needed because of output tree spanning different
   // files, via setting TTree::SetMaxTreeSize
   outFile = outTree->GetCurrentFile();
@@ -135,17 +142,17 @@ int main(int argc, char *argv[])
   // no, we do not need to delete the objects in the file, this is done on the file delete... 
   
   // delete analysis object
-  INFO("# ara: Deleting analysis");
+  INFO("# analyzer: Deleting analysis");
   delete analysis;
 
   // time and memory info
   timer.Stop();
   gSystem->GetProcInfo(&info);
   INFO("");
-  INFO("# ara: real time (s)     : " << timer.RealTime());
-  INFO("# ara: CPU time (s)      : " << timer.CpuTime()); 
-  INFO("# ara: resident mem (MB) : " << info.fMemResident/1000.);
-  INFO("# ara: virtual  mem (MB) : " << info.fMemVirtual/1000.);
+  INFO("# analyzer: real time (s)     : " << timer.RealTime());
+  INFO("# analyzer: CPU time (s)      : " << timer.CpuTime()); 
+  INFO("# analyzer: resident mem (MB) : " << info.fMemResident/1000.);
+  INFO("# analyzer: virtual  mem (MB) : " << info.fMemVirtual/1000.);
   INFO("");
 
   // info at end of program
@@ -154,8 +161,10 @@ int main(int argc, char *argv[])
   INFO("");
   INFO("######################################################################");;
   INFO("#                                                                    #");;
-  INFO("# End executing ara at " << asctime(timeinfo)		       );
+  INFO("# End executing analyzer at " << asctime(timeinfo)		       );
   INFO("#                                                                    #");;
   INFO("######################################################################");;
   INFO("");
+  
+  return 0;
 }

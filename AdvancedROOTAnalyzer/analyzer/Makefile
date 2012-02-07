@@ -5,7 +5,7 @@
 # (C) Martin Weber 2011
 
 # Name of the executable
-PROGRAM       = ara
+PROGRAM        = analyzer
 
 # external includes / libraries
 #CLHEP_VERSION = 2.0.2.1

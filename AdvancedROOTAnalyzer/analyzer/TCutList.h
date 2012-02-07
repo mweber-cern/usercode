@@ -6,6 +6,7 @@
 
 class TCutList
 {
+protected:
   // cuts
   std::map <std::string, bool> fCuts;
 

@@ -10,6 +10,7 @@
 
 // ROOT includes
 #include "TString.h" // for char *Form(...)
+#include "TObject.h"
 
 /** \file Utilities.h
  *
@@ -42,6 +43,7 @@ default: std::cout << "DEBUG: " << message << std::endl; } } }
   
 // test if two values are equal within given precision
 bool equal(const double val1, const double val2, const double precision);
+TObject * get_object(const char * filename, const char * objectname);
 
 std::vector<std::string> &split(const std::string &s, char delim, std::vector<std::string> &elems);
 std::vector<std::string> split(const std::string &s, char delim);
