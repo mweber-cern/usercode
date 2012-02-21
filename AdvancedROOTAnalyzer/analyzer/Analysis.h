@@ -26,7 +26,11 @@ protected:
   TTree &   fInputTree;
   TTree &   fOutputTree;
   TEnv  &   fCfgFile;
-  double    fWeight; // event weight
+  double    fFakeRate[2]; // fake rate for the two muons
+  double    fFakeWeight;  // fake rate weight for one mu fluctutation in doublefake sample
+  Int_t     fMuoId[2]; // ID's of selected muons
+  TLorentzVector fSigMu[2]; // only in case of signal: generated muons
+  TLorentzVector fSigJet[2]; // only in case of signal: generated jets
 
   //////////////////////////////////////////////////////////////////////
   // configuration options
@@ -85,6 +89,8 @@ protected:
   void FillNoWeight(const char * name, double value);
   void Fill(const char * name, double x, double y);
   void Fill(const char * name, double x, double y, double z);
+
+  double GetFakeRate(double muopt, double eta, double jetpt);
 
   // taken over from ACSUSYAna
   void BasicDump(int i);
