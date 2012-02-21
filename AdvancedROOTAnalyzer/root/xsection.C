@@ -727,7 +727,7 @@ void xsExpectedError(Int_t ntrials)
   gFitSignal = signalHisto();
   gFitBackground = backgroundHisto();
   TH1D * xsdistrib = experror(xs, ntrials);
-  xsdistrib->SetName(Form("experror-%d-%d-%d", gPeriod[gStart], gPeriod[gEnd], ntrials));
+  xsdistrib->SetName(Form("experror-%s-%s-%d", gPeriod[gStart], gPeriod[gEnd], ntrials));
 
   // save histo in file
   TFile * f = new TFile("experror.root", "UPDATE");
