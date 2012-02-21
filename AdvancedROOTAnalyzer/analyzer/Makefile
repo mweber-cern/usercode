@@ -45,6 +45,8 @@ DEPENDS       = $(SOURCES:.cxx=.d)
 
 DICT	      = Dict
 
+CUTFLOW	      = CutFlow
+
 DATE	     := $(shell date "+%F")
 
 ######################################################################
@@ -97,12 +99,15 @@ include $(DEPENDS)
 
 $(DICT).C: $(HEADERS) LinkDef.h
 	@echo "Generating dictionary $(DICT)..."
-	@echo rootcint -f $@ -c $(EXTINCDIR) $+
-	@rootcint -f $@ -c $(EXTINCDIR) $+
+	rootcint -f $@ -c $(EXTINCDIR) $+
+
+$(CUTFLOW).C: $(SOURCES)
+	@echo "Generating cutflow..."
+	gencutflow.py -f $@ $+
 
 ######################################################################
 # targets
 
-$(PROGRAM):  $(OBJECTS) $(DICT).o
+$(PROGRAM):  $(OBJECTS) $(DICT).o $(CUTFLOW).o
 	$(LD) $(LDFLAGS) $+ -o $@
 		@echo "$@ done"
