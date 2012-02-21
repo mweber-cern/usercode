@@ -146,7 +146,7 @@ def check_log(logfilename, errors, warnings, requirements):
         return False
 
     # check for warnings
-    grep_file(logfilename, errors)
+    grep_file(logfilename, warnings)
 
     # check for requirements
     if requirements != None:
