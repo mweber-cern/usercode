@@ -9,6 +9,7 @@ using namespace std;
 #include "TFile.h"
 #include "TTree.h"
 #include "TSystem.h"
+#include "TROOT.h"
 
 #include "plot.h"
 
@@ -61,9 +62,10 @@ char * strdup_new(const char * text)
 
 void setopt(TStyle * style)
 {
+  style->SetPadLeftMargin(0.15);
+  return;
   // style options
   style->SetStatColor(10);        // white background for statistics box
-  style->SetPadColor(19);         // pads with grey background
   style->SetOptTitle(0);          // don't show histogram title
 //   style->SetTitleColor(10);    // title background white
   style->SetFillColor(10);        // fill everything with a white background
@@ -72,7 +74,6 @@ void setopt(TStyle * style)
   style->SetCanvasBorderSize(0);  // no borders in canvases please!
   style->SetCanvasColor(10);      // white canvases please
   style->SetPadBorderMode(0);     // no borders in Pads please!
-  style->SetPadLeftMargin(0.15);
   style->SetPadBottomMargin(0.15);
   style->SetPadRightMargin(0.04);
   style->SetPadTopMargin(0.07);
@@ -93,6 +94,7 @@ void setopt(TStyle * style)
 
 void setopt(TCanvas * canvas)
 {
+  return;
   // set default options for canvas
   canvas->SetTopMargin(0.03);
   canvas->SetRightMargin(0.05);
@@ -107,27 +109,22 @@ void setopt(TCanvas * canvas)
 void setopt(TH1 * histo)
 {
   // set histo default options
+  histo->SetTitleOffset(1.3, "Y"); // title offset
+  return;
   histo->SetLabelSize(0.06, "X"); // title offset
   histo->SetLabelSize(0.06, "Y"); // title offset
+  histo->SetLabelSize(0.06, "Z"); // title offset
   histo->SetTitleSize(0.06, "X");  // title size
   histo->SetTitleSize(0.06, "Y");  // title size
-  histo->SetTitleOffset(1.3, "Y"); // title offset
+  histo->SetTitleSize(0.06, "Z");  // title size
   histo->SetTitleOffset(1.1, "X"); // title offset
+  histo->SetTitleOffset(1.1, "Z"); // title offset
+  histo->SetMarkerStyle(8);
+  histo->SetMarkerSize(1.1);
 //    histo->GetXaxis()->SetTitleColor(kBlack);
 //    histo->GetYaxis()->SetTitleColor(kBlack);
 //    histo->GetXaxis()->CenterTitle();
 }
-
-// void setopt(TH2D * histo)
-// {
-//   // set histo default options
-//   histo->SetLabelSize(0.06, "X"); // title offset
-//   histo->SetLabelSize(0.06, "Y"); // title offset
-//   histo->SetTitleSize(0.06, "X");  // title size
-//   histo->SetTitleSize(0.06, "Y");  // title size
-//   histo->SetTitleOffset(1.1, "Y"); // title offset
-//   histo->SetTitleOffset(1.1, "X"); // title offset
-// }
 
 void setopt(TLegend * leg)
 {
@@ -138,6 +135,7 @@ void setopt(TLegend * leg)
 
 void setopt(TGraph * gr)
 {
+  return;
   TH1F * histo = gr->GetHistogram();
   if (histo != 0)
     setopt(histo);
@@ -145,6 +143,37 @@ void setopt(TGraph * gr)
   gr->SetMarkerSize(1.1);
 }
 
+TObject * get_object(const char * filename, const char * objectname)
+{
+  // try to find out if file is already opened
+  TFile * f = (TFile *) gROOT->GetListOfFiles()->FindObject(filename);
+  if (f != 0) {
+//     cout << "File " << filename << " was already open" << endl;
+  }
+  else {
+    f = new TFile(filename, "READ");
+    if (f == 0) {
+      ERROR("Could not create TFile object for " << filename);
+      return 0;
+    }
+    if (!f->IsOpen()) {
+      ERROR("Could not open file " << filename);
+      return 0;
+    }
+  }
+  TObject * obj = f->Get(objectname);
+  if (obj == 0) {
+    ERROR("Could not get object " << objectname << " from file " << filename);
+    return 0;
+  }
+  // put histograms in main directory
+  if (obj->IsA()->InheritsFrom("TH1")) {
+    TH1 * h = (TH1 *) obj;
+    h->SetDirectory(0);
+  }
+  delete f;
+  return obj;
+}
 
 // read configuration from file
 void read_config_file(const char * configFileName = "Overview.cfg")
@@ -157,9 +186,9 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   gConfig = new TEnv(configFileName);
 
   // number of data taking periods
-  gMaxPeriod = gConfig->GetValue("N_period", -1);
+  gMaxPeriod = gConfig->GetValue("periods", -1);
   if (gMaxPeriod < 1) {
-    ERROR("Number of periods N_period not found in config file or N_period < 1");
+    ERROR("Number of periods not found in config file or periods < 1");
     return;
   }
   INFO("Configuring for " << gMaxPeriod << " periods");
@@ -238,6 +267,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
     gProcess[i].mcolor = gConfig->GetValue(Form("%s.mcolor", selector),  1);
     gProcess[i].msize  = gConfig->GetValue(Form("%s.msize", selector),  0.7);
     gProcess[i].join   = gConfig->GetValue(Form("%s.join", selector), kFALSE);
+    gProcess[i].stack  = gConfig->GetValue(Form("%s.stack", selector), kTRUE);    
   }
   // data
   gProcess[gMaxProcess-1].fname = strdup_new(gConfig->GetValue("file", "data"));
@@ -251,35 +281,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   gProcess[gMaxProcess-1].mcolor    = 1;
   gProcess[gMaxProcess-1].msize     = .7;
   gProcess[gMaxProcess-1].join      = kFALSE;
-
-  // read which histograms to join (old style)
-  bool first = true;
-  for (Int_t i = 2; i < gMaxProcess; i++) {
-    char * dummy = strdup_new(gConfig->GetValue(Form("joinbg.%d", i), "dummy"));
-    if (!strcmp(dummy, "dummy")) {
-      delete dummy;
-      continue;
-    }
-    // warn user not to use this type of syntax, it is dangerous
-    if (first) {
-      WARNING("Old-style join syntax \"joinbg." << i << "\" found in config file");
-      first = false;
-    }
-    Int_t id;
-    istringstream ss(dummy);
-    for (Int_t j = 0; j < i; j++) {
-      ss >> id;
-      if (id < 0 || id > gMaxProcess || ss.bad()) {
-	ERROR("reading parameter #" << j << " of joinbg." << i << " (value " << id);
-	delete dummy;
-	return;
-      }
-      // do not join the first one
-      if (j > 0)
-	gProcess[id].join = kTRUE;
-    }
-    delete dummy;
-  }
+  gProcess[gMaxProcess-1].stack     = kFALSE;
 
   // misc setup
   gBase = strdup_new(gConfig->GetValue("basedir", "."));
@@ -458,8 +460,9 @@ Int_t FindFirstHisto()
   // find a histogram that has been filled and return its index in gHisto[gPadNr]
   // if no histogram existent, return -1
   for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][gOrder[gPadNr][i]] != 0) {
-      return gOrder[gPadNr][i];
+    Int_t process = gOrder[gPadNr][i];
+    if (gHisto[gPadNr][process] != 0) {
+      return process;
     }
   }
   ERROR("No MC found");
@@ -537,7 +540,7 @@ void selection(const char * subdir)
   readcuts();
 }
 
-void periods(char * startperiod, char * endperiod = 0)
+void periods(char * startperiod, char * endperiod)
 {
   // select period range to be displayed
   setup();
@@ -833,9 +836,9 @@ void draw(Bool_t autotitle = kTRUE)
   gPad->cd();
   gPad->Clear();
 
-  // now draw all histograms in canvas
-  TH1D * histo;
-  for (Int_t i = 0; i < gMaxProcess; i++) {
+  // now draw all stacked histograms in canvas
+  TH1D * histo = 0;
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
     Int_t process = gOrder[gPadNr][i];
     LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
     histo = gHisto[gPadNr][process];
@@ -843,35 +846,34 @@ void draw(Bool_t autotitle = kTRUE)
       continue;
 
     DEBUG("draw 1");
-    histo->SetTickLength(-0.02);
     histo->SetLineStyle(gProcess[process].lstyle);
+    histo->SetLineColor(gProcess[process].lcolor);
 
-    if (process == gMaxProcess - 1) {
-      // data
-      histo->SetMarkerStyle(gProcess[process].marker);
-      histo->SetMarkerColor(gProcess[process].mcolor);
-      histo->SetMarkerSize(gProcess[process].msize);
+    if (!gProcess[process].stack)
+      continue;
+
+    if (gIsColor) {
+      histo->SetFillStyle(1001);
+      histo->SetFillColor(gProcess[process].fcolor);
     }
     else {
-      if (gIsColor) {
-	histo->SetFillStyle(1001);
-	histo->SetFillColor(gProcess[process].fcolor);
+      // delete old shadow histogram
+      TH1D * shadow = gShadow[gPadNr][process];
+      if (shadow) {
+	delete shadow;
       }
-      else {
-        // delete old shadow histogram
-        TH1D * shadow = gShadow[gPadNr][process];
-        if (shadow) {
-          delete shadow;
-        }
-        shadow = new TH1D(*histo);
-        shadow->SetFillStyle(1001);
-        shadow->SetFillColor(999);
-        shadow->Draw("same");
-        histo->SetFillStyle(gProcess[process].hstyle);
-        histo->SetFillColor(gProcess[process].hcolor);
-      }
+      shadow = new TH1D(*histo);
+      shadow->SetFillStyle(1001);
+      shadow->SetFillColor(999);
+      shadow->Draw("same");
+      histo->SetFillStyle(gProcess[process].hstyle);
+      histo->SetFillColor(gProcess[process].hcolor);
     }
     if (first) {
+      if (gProcess[process].join) {
+	ERROR("first process to be drawn (" << gProcess[process].fname 
+	      << ") has option 'join'");
+      }
       DEBUG("draw first");
       // draw first
       if (autotitle) {
@@ -885,16 +887,71 @@ void draw(Bool_t autotitle = kTRUE)
       first = kFALSE;
       DEBUG("end draw first");
     }
-    else if (process == gMaxProcess-1) {
-      // draw data
-      histo->Draw("e1psame");
-    }
     else {
       // draw others, but only if not joined
       if (!gProcess[process].join)
 	histo->Draw("histosame");
     }
   }
+
+  // draw unstacked histograms as lines + data
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
+    histo = gHisto[gPadNr][process];
+    // ignore stacked histograms
+    if (gProcess[process].stack)
+      continue;
+
+    if (process == gMaxProcess - 1) {
+      // data
+      histo->SetMarkerStyle(gProcess[process].marker);
+      histo->SetMarkerColor(gProcess[process].mcolor);
+      histo->SetMarkerSize(gProcess[process].msize);
+    }
+    else {
+      histo->SetLineWidth(2);
+    }
+
+    // check if histogram exists
+    histo = gHisto[gPadNr][process];
+    if (histo == 0)
+      continue;
+
+    if (first) {
+      if (gProcess[process].join) {
+	ERROR("first process to be drawn (" << gProcess[process].fname 
+	      << ") has option 'join'");
+      }
+      DEBUG("draw unstacked first");
+      // draw first
+      if (autotitle) {
+	histo->SetXTitle(GetXTitle(histo));
+	histo->SetYTitle(GetYTitle(histo));
+      }
+      setopt(histo);
+      if (process == gMaxProcess-1)
+	histo->Draw("e1p");
+      else
+	histo->Draw("histo");
+      histo->GetXaxis()->CenterTitle();
+      histo->GetYaxis()->CenterTitle(kFALSE);
+      first = kFALSE;
+      DEBUG("end draw unstacked first");
+    }
+    else {
+      if (process == gMaxProcess-1) {
+	// draw data
+	histo->Draw("e1psame");
+      } 
+      else {
+	// draw others, but only if not joined
+	if (!gProcess[process].join)
+	  histo->Draw("histosame");
+      }
+    }
+  }  
+
   // draw cut (if it is there)
   drawcut();
   gPad->Update();
@@ -1093,7 +1150,7 @@ void mirror()
   draw();
 }
 
-void print(const char * hname = 0)
+void print(const char * hname)
 {
   // print current canvas in a file "name", substitute current
   // histogram name if no name given
@@ -1143,7 +1200,7 @@ void pprint(const char * hname = 0)
   gPad->Print(fpath);
 }
 
-void title(const char * title = 0)
+void title(const char * title)
 {
   // set the axis titles for this plot.
   // If no name given, then the default title is taken
@@ -1177,7 +1234,7 @@ void liny()
   draw();
 }
 
-void ascii(const char * fname = 0)
+void ascii(const char * fname)
 {
   // print #data, #signal, #back in ascii format to screen and into file
   if (FindFirstHisto() < 0)
@@ -1238,14 +1295,16 @@ void ascii(const char * fname = 0)
 
 void drawperiod(Int_t posi = -1)
 {
+  DEBUG("enter drawperiod()");
+
   // draw energy in current plot
   static TLatex * t[gMaxPad] = { 0 };
   char etext[50];
   if (gStart != gEnd) {
-    snprintf(etext, 50, "CMS %s - %s", gPeriod[gStart], gPeriod[gEnd]);
+    snprintf(etext, 50, "CMS %s - %s preliminary", gPeriod[gStart], gPeriod[gEnd]);
   }
   else {
-    snprintf(etext, 50, "CMS %s", gPeriod[gStart]);
+    snprintf(etext, 50, "CMS %s preliminary", gPeriod[gStart]);
   }
 
   Int_t hstart = FindFirstHisto();
@@ -1256,23 +1315,74 @@ void drawperiod(Int_t posi = -1)
     t[gPadNr] = 0;
   }
   if (posi > 0) {
-    t[gPadNr] = new TLatex(0.955, 0.97, etext);
+    t[gPadNr] = new TLatex(0.955, 0.99, etext);
     t[gPadNr]->SetTextAlign(33);
   }
   else if (posi < 0) {
-    t[gPadNr] = new TLatex(0.25, 0.97, etext);
+    t[gPadNr] = new TLatex(0.24, 0.99, etext);
     t[gPadNr]->SetTextAlign(13);
   }
   else {
-    t[gPadNr] = new TLatex(0.5, 0.97, etext);
+    t[gPadNr] = new TLatex(0.5, 0.99, etext);
     t[gPadNr]->SetTextAlign(23);
   }
+  t[gPadNr]->SetTextSize(0.04);
   t[gPadNr]->SetNDC();
   t[gPadNr]->Draw();
 }
 
-void legend(Double_t mincontent = 0.01, Int_t posi = 1, Double_t miny = -1)
+void compose()
 {
+  DEBUG("enter compose");
+  // sum up the histograms in the current order, such that they can be
+  // drawn on the screen, one before the other
+
+  // loop over processes
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    if (gHisto[gPadNr][process] == 0)
+      continue;
+    if (!gProcess[process].stack)
+      continue;
+    // add to all previous ones
+    for (Int_t j = 0; j < i; j++) {
+      Int_t backmc = gOrder[gPadNr][j];
+      if (!gProcess[backmc].stack)
+	continue;
+      if (gHisto[gPadNr][backmc] != 0)
+	gHisto[gPadNr][backmc]->Add(gHisto[gPadNr][process]);
+    }
+  }
+}
+
+void decompose()
+{
+  // subtract summed histograms that are ready for drawing into histograms
+  // corresponding to each process...
+  if (FindFirstHisto() < 0)
+    return;
+  // loop over processes
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    if (gHisto[gPadNr][process] == 0)
+      continue;
+    if (!gProcess[process].stack)
+      continue;
+    for (Int_t j = i+1; j < gMaxProcess-1; j++) {
+      Int_t proc = gOrder[gPadNr][j];
+      if (gHisto[gPadNr][proc] == 0)
+	continue;
+      if (!gProcess[proc].stack)
+	continue;
+      gHisto[gPadNr][process]->Add(gHisto[gPadNr][proc], -1);
+      break;
+    }
+  }
+}
+
+void legend(Double_t mincontent, Int_t posi, Double_t miny)
+{
+  DEBUG("enter legend()");
   // draw a legend with currently used colors
   static TLegend * t[gMaxPad] = { 0 };
   Int_t position = FindFirstHisto();
@@ -1280,30 +1390,25 @@ void legend(Double_t mincontent = 0.01, Int_t posi = 1, Double_t miny = -1)
     return;
 
   if (miny < 0) {
-    if (strstr(gSubDir, "findsusyb3"))
-      miny = 0.4;
-    else
-      miny = 0.6;
+    miny = 0.2;
   }
 
-  // count processes
-  Int_t num = 0;
-  Double_t integral = gHisto[gPadNr][gOrder[gPadNr][position]]->Integral();
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][gOrder[gPadNr][i]] == 0)
-      continue;
-    if (i < gMaxProcess-2) {
-      if (gHisto[gPadNr][gOrder[gPadNr][i+1]]) {
-	if ((gHisto[gPadNr][gOrder[gPadNr][i]]->Integral() -
-	     gHisto[gPadNr][gOrder[gPadNr][i+1]]->Integral())/integral < mincontent)
-	  continue;
-      }
-    }
-    else if (gHisto[gPadNr][gOrder[gPadNr][i]]->Integral()/integral < mincontent)
-      continue;
+  // get sum of all processes
+  Double_t integral = gHisto[gPadNr][position]->Integral();
 
+  decompose();
+
+  // count processes that contribute with given fraction to the integral
+  Int_t num = 0;
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    if (gHisto[gPadNr][process] == 0 || gProcess[process].join)
+      continue;
+    if (gHisto[gPadNr][process]->Integral()/integral < mincontent)
+      continue;
     num++;
   }
+
   // determine minimum
   miny = TMath::Max(0.92-num*0.06, miny);
   INFO("Found " << num << " histograms, miny = " << miny);
@@ -1312,124 +1417,60 @@ void legend(Double_t mincontent = 0.01, Int_t posi = 1, Double_t miny = -1)
     delete t[gPadNr];
     t[gPadNr] = 0;
   }
-  if (posi > 0)
-    t[gPadNr] = new TLegend(0.720, miny, 0.92, 0.92);
-  else if (posi < 0)
-    t[gPadNr] = new TLegend(0.173, miny, 0.413, 0.92);
-  else
-    t[gPadNr] = new TLegend(0.45, miny, 0.69, 0.92);
+  double minx, maxx;
+  if (posi > 0) {
+    minx = 0.720; 
+    maxx = 0.92;
+  }
+  else if (posi < 0) {
+    minx = 0.173;
+    maxx = 0.413;
+  }
+  else {
+    minx = 0.45;
+    maxx = 0.69;
+  }
+  t[gPadNr] = new TLegend(minx, miny, maxx, 0.92, "NDC");
   setopt(t[gPadNr]);
   for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][gOrder[gPadNr][i]] == 0)
+    Int_t process = gOrder[gPadNr][i]; 
+    if (gHisto[gPadNr][process] == 0 || gProcess[process].join)
       continue;
-    if (i < gMaxProcess-2) {
-      if (gHisto[gPadNr][gOrder[gPadNr][i+1]]) {
-	if ((gHisto[gPadNr][gOrder[gPadNr][i]]->Integral() -
-	     gHisto[gPadNr][gOrder[gPadNr][i+1]]->Integral())/integral < mincontent)
-	  continue;
-      }
-    }
-    else if (gHisto[gPadNr][gOrder[gPadNr][i]]->Integral()/integral < mincontent)
+    if (gHisto[gPadNr][process]->Integral()/integral < mincontent)
       continue;
 
-    const char * opt = "f"; // fill area
+    const char * opt;
+    const char * name = gProcess[process].tname;
     if (i == gMaxProcess-1) {
-      opt = "p"; // data with marker
       if (gGerman)
-	t[gPadNr]->AddEntry(gHisto[gPadNr][gOrder[gPadNr][i]], "Daten", opt);
-      else
-	t[gPadNr]->AddEntry(gHisto[gPadNr][gOrder[gPadNr][i]], gProcess[gOrder[gPadNr][i]].tname, opt);
+	name = "Daten";
+      opt= "p";
     }
-    else
-      t[gPadNr]->AddEntry(gHisto[gPadNr][gOrder[gPadNr][i]], gProcess[gOrder[gPadNr][i]].tname, opt);
+    else if (gProcess[process].stack) {
+      opt = "f";
+    }
+    else {
+      opt = "l";
+    }
+    t[gPadNr]->AddEntry(gHisto[gPadNr][process], name, opt);
   }
   t[gPadNr]->Draw();
+
   // insert energy information
   drawperiod(posi != 0 ? -posi : -1);
+
+  compose();
+
+  DEBUG("exit legend()");
 }
 
-void subfigure(const char * subfig = "a)")
+void subfigure(const char * subfig)
 {
   // add entry for subfigure in the current canvas, e.g. "a)"
   TText * t = new TText(0.95, 0.97, subfig);
   t->SetTextAlign(33);
   t->SetNDC();
   t->Draw();
-}
-
-void legend2(Double_t mincontent = 0.01)
-{
-  // draw a legend with currently used colors
-  static TLegend * t2[gMaxPad] = { 0 };
-  Int_t position = FindFirstHisto();
-  if (position < 0)
-    return;
-
-  // count processes
-  Int_t num = 0;
-  Double_t integral = gHisto[gPadNr][gOrder[gPadNr][position]]->Integral();
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][gOrder[gPadNr][i]] == 0)
-      continue;
-    if (i < gMaxProcess-2) {
-      if (gHisto[gPadNr][gOrder[gPadNr][i+1]]) {
-	if ((gHisto[gPadNr][gOrder[gPadNr][i]]->Integral() -
-	     gHisto[gPadNr][gOrder[gPadNr][i+1]]->Integral())/integral < mincontent)
-	  continue;
-      }
-    }
-    else if (gHisto[gPadNr][gOrder[gPadNr][i]]->Integral()/integral < mincontent)
-      continue;
-
-    num++;
-  }
-
-  // determine minimum
-  Double_t miny  = TMath::Max(0.92-num*0.1, 0.15);
-  INFO("Found " << num << " histograms, miny = " << miny);
-
-  if (t2[gPadNr]) {
-    delete t2[gPadNr];
-    t2[gPadNr] = 0;
-  }
-
-  t2[gPadNr] = new TLegend(0.01, miny, 0.99, 0.99);
-  setopt(t2[gPadNr]);
-  t2[gPadNr]->SetTextSize(0.12);
-  t2[gPadNr]->SetMargin(0.2);
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][gOrder[gPadNr][i]] == 0)
-      continue;
-    if (i < gMaxProcess-2) {
-      if (gHisto[gPadNr][gOrder[gPadNr][i+1]]) {
-	if ((gHisto[gPadNr][gOrder[gPadNr][i]]->Integral() -
-	     gHisto[gPadNr][gOrder[gPadNr][i+1]]->Integral())/integral < mincontent)
-	  continue;
-      }
-    }
-    else if (gHisto[gPadNr][gOrder[gPadNr][i]]->Integral()/integral < mincontent)
-      continue;
-
-    const char * opt = "f"; // fill area
-    if (i == gMaxProcess-1) {
-      opt = "p"; // data with marker
-      if (gGerman)
-	t2[gPadNr]->AddEntry(gHisto[gPadNr][gOrder[gPadNr][i]], "Daten", opt);
-      else
-	t2[gPadNr]->AddEntry(gHisto[gPadNr][gOrder[gPadNr][i]],
-			     gProcess[gOrder[gPadNr][i]].tname, opt);
-    }
-    else
-      t2[gPadNr]->AddEntry(gHisto[gPadNr][gOrder[gPadNr][i]],
-			   gProcess[gOrder[gPadNr][i]].tname, opt);
-  }
-  DEBUG("now drawing legend");
-  Int_t savenr = gPadNr;
-  cd(10*(gPadNr+1));
-  t2[savenr]->Draw();
-  cd(savenr+1);
-  // insert energy information
-  drawperiod(1);
 }
 
 void DeleteOld()
@@ -1547,56 +1588,37 @@ void auto_order()
   double integral[gMaxProcess];
   // order all but data
   for (Int_t i = 0; i < gMaxProcess-1; i++) {
-    if (gHisto[gPadNr][i])
-      integral[i] = gHisto[gPadNr][i]->Integral();
-    else
-      integral[i] = 0;
+    integral[i] = 0;
+    if (!gHisto[gPadNr][i]) {
+      continue;
+    }
+    // is it already joined? 
+    if (gProcess[i].join && i > 0) {
+      // if it is a joined histogram, keep it below its parent
+      integral[i] = integral[i-1]*0.999999;
+    }
+    else {
+      // otherwise order according to its integral.
+      double sum = gHisto[gPadNr][i]->Integral();
+      // loop over all histograms which are joined with this one
+      // and add the integral
+      for (Int_t j = i+1; j < gMaxProcess-1; j++) {
+	// stop if no more bg's to be added
+	if (!gProcess[j].join)
+	  break;
+	if (gHisto[gPadNr][j] == 0)
+	  continue;
+	sum += gHisto[gPadNr][j]->Integral();
+      }
+      integral[i] = sum;
+    }
+    DEBUG(gProcess[i].fname << ": " << integral[i]);
   }
   TMath::Sort(gMaxProcess-1, integral, gOrder[gPadNr]);
 }
 
-void compose()
-{
-  DEBUG("enter compose");
-  // sum up the histograms in the current order, such that they can be
-  // drawn on the screen, one before the other
-
-  // loop over processes
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    Int_t process = gOrder[gPadNr][i];
-    // don't sum up data (last one)
-    if (process < gMaxProcess - 1) {
-      // add to all previos ones
-      for (Int_t j = 0; j < i; j++) {
-	Int_t backmc = gOrder[gPadNr][j];
-	if ((gHisto[gPadNr][backmc] != 0) && (gHisto[gPadNr][process] != 0))
-	  gHisto[gPadNr][backmc]->Add(gHisto[gPadNr][process]);
-      }
-    }
-  }
-}
-
-void decompose()
-{
-  // subtract summed histograms that are ready for drawing into histograms
-  // corresponding to each process...
-  if (FindFirstHisto() < 0)
-    return;
-  // loop over processes, don't subtract from last mc
-  for (Int_t i = 0; i < gMaxProcess-2; i++) {
-    if (gHisto[gPadNr][gOrder[gPadNr][i]] == 0)
-      continue;
-    // find next mc
-    Int_t j;
-    for (j = i+1; (j < gMaxProcess-1) && (gHisto[gPadNr][gOrder[gPadNr][j]] == 0); j++)
-      ;
-    if (j < gMaxProcess-1)
-      gHisto[gPadNr][gOrder[gPadNr][i]]->Add(gHisto[gPadNr][gOrder[gPadNr][j]], -1);
-  }
-}
-
-void plot(const char * hname, const char * selection = "global_weight",
-	  Int_t nbins = 100, Double_t min = 0, Double_t max = 1)
+void plot(const char * hname, const char * selection,
+	  Int_t nbins, Double_t min, Double_t max)
 {
   // plot histogram "hname" for the selected selection and period
   // loops over all files.
