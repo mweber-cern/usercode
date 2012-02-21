@@ -1,7 +1,7 @@
 #!/bin/env python
 
 import os,sys,optparse
-import ac3ana
+import ara
 
 def merge(filelist, counter):
     outfilename="merged_" + str(counter) + ".root"
@@ -19,7 +19,7 @@ def main():
                          help="directory with ROOT files to merge",
                          default=defaultdir)
     (options, args) = optParser.parse_args()
-    ac3ana.config.read(options.cfgfile)
+    ara.config.read(options.cfgfile)
 
     # user must give path as argument
     if len(args) != 1:
