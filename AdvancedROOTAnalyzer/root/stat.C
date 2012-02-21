@@ -1,4 +1,5 @@
 #include "plot.h"
+#include "stat.h"
 
 #include <TMath.h>
 #include <TRandom.h>
@@ -40,7 +41,7 @@ Double_t chi2_int(Int_t start, Int_t end, Int_t & ndof, Int_t & nlow)
   return ChiSquare;
 }
 
-void stat(Double_t low = 0, Double_t up = 0)
+void stat(Double_t low, Double_t up)
 {
   // count number of signal, background and data MC
   if (FindFirstHisto() < 0) {
@@ -59,6 +60,7 @@ void stat(Double_t low = 0, Double_t up = 0)
   Double_t  * nEvents   = new Double_t[gMaxProcess]; // number of selected events
   Double_t  * nGene     = new Double_t[gMaxProcess]; // number of generated events
   Double_t  * nExpected = new Double_t[gMaxProcess]; // number of expected events
+  Double_t  * weight    = new Double_t[gMaxProcess]; // weight of this MC
 
   // find bins to start and end with
   Int_t start, end;
@@ -84,6 +86,7 @@ void stat(Double_t low = 0, Double_t up = 0)
       nEvents[i] = 0;
       nExpected[i] = 0;
       nGene[i] = 0;
+      weight[i] = 0;
       continue;
     }
     // get integral for this mc
@@ -96,7 +99,10 @@ void stat(Double_t low = 0, Double_t up = 0)
       // INFO("gLumi[" << period << "]=" << gLumi[period] << ", xs = " << gProcessInfo[period][i].xs);
       // compute generated events
       nGene[i] += gProcessInfo[period][i].Nev;
+      double mcLumi = gProcessInfo[period][i].Nev/gProcessInfo[period][i].xs;
+      weight[i] += gLumi[period]/mcLumi * gProcessInfo[period][i].weight;
     }
+    weight[i] /= (gEnd-gStart+1);
     // something we do for signal only
     if (i < gMaxSignal) {
       // add signal events
@@ -114,10 +120,10 @@ void stat(Double_t low = 0, Double_t up = 0)
 
   printf("*******************************************************************************\n");
   Int_t  nfill = 15 - strlen(gHisto[gPadNr][hstart]->GetName());
-  printf("%15s    N_events +/-   Delta_N      effi      purity       effi*puri\n", 
+  printf("%15s       N_events +/-    Delta_N      effi      purity  av. weight\n", 
 	 gHisto[gPadNr][hstart]->GetName());
   printf("*******************************************************************************\n");
-  // inform user for each mc (in normal order)
+  // inform user for each mc (ordered)
   for (Int_t k = 0; k < gMaxProcess-1; k++) {
     Int_t i = gOrder[gPadNr][k];
     if (nExpected[i] < 1E-9)
@@ -144,8 +150,8 @@ void stat(Double_t low = 0, Double_t up = 0)
     nfill = 16 - strlen(gProcess[i].fname);
     for (Int_t j = 0; j < nfill; j++)
       printf(" ");
-    printf(" %9.3f +/- %9.3f  %8.4f %%  %8.4f %%  %12.10f\n", 
-	   nEvents[i], nErr, effi*100, puri*100, effi*puri);
+    printf(" %12.3f +/- %10.3f  %8.4f %%  %8.4f %%  %8.3f\n", 
+	   nEvents[i], nErr, effi*100, puri*100, weight[i]);
   }
 
   // summaries
@@ -158,9 +164,9 @@ void stat(Double_t low = 0, Double_t up = 0)
     puri = nTotSignal / nTotal;
   else
     puri = 0;
-  printf("total signal:     %9.3f +/- %9.3f  %8.4f %%  %8.4f %%  %12.10f\n", 
+  printf("total signal:     %12.3f +/- %10.3f  %8.4f %%  %8.4f %%  %8.6f\n", 
 	 nTotSignal, TMath::Sqrt(nTotErrSig), effi*100, puri*100, effi*puri);
-  printf("total back:       %9.3f +/- %9.3f\n", 
+  printf("total back:       %12.3f +/- %10.3f\n", 
 	 nTotal-nTotSignal, TMath::Sqrt(nTotErrBack));
   printf("===============================================================================\n");
   // total, under & overflow mc
@@ -172,7 +178,7 @@ void stat(Double_t low = 0, Double_t up = 0)
     Int_t obin = gHisto[gPadNr][hindex]->GetNbinsX()+1;
     oflow      = gHisto[gPadNr][hindex]->GetBinContent(obin);
   }
-  printf("total mc:         %9.3f +/- %9.3f (u: %7.3f) (o: %7.3f)\n", 
+  printf("total mc:         %12.3f +/- %10.3f (u: %7.3f) (o: %7.3f)   Lumi:\n", 
 	 nTotal, TMath::Sqrt(nTotErrSig+nTotErrBack), uflow, oflow);
   // total, under & overflow data
   uflow  = 0;
@@ -187,7 +193,7 @@ void stat(Double_t low = 0, Double_t up = 0)
   for (Int_t period = gStart; period <= gEnd; period++) {
     lumi += gLumi[period];
   }
-  printf("data:             %9.3f +/- %9.3f (u: %7.3f) (o: %7.3f) L: %7.3f\n", 
+  printf("data:             %12.3f +/- %10.3f (u: %7.3f) (o: %7.3f) %6.2f\n", 
 	 nData, TMath::Sqrt(Double_t(nData)), uflow, oflow, lumi);
   // deviation and chi2
   Int_t ndof, nlow;
@@ -195,77 +201,15 @@ void stat(Double_t low = 0, Double_t up = 0)
   Double_t Deviation = 0;
   if (nTotal != 0)
     Deviation = (nData - nTotal) / TMath::Sqrt(nTotal);
-  printf("Deviation:        %9.3f sigma   Chi2/ndof: %5.0f/%3d   Prob: %12.9f %%\n", 
+  printf("Deviation:        %9.3f sigma   Chi2/ndof: %8.0f/%3d   Prob: %9.6f %%\n", 
 	 Deviation, ChiSquare, ndof, 100 * TMath::Prob(ChiSquare, ndof));
 
   printf("*******************************************************************************\n");
 
-  delete nExpected;
-  delete nGene;
-  delete nEvents;
-}
-
-void efficiency()
-{
-  // compute efficiency matrix for my selection
-//    TCanvas * ceffi = new TCanvas("ceffi", "efficiency", 
-//  				0,0,600,600*TMath::Sqrt(2));
-//    ceffi->Divide(1, 3);
-  Double_t effi;
-  Double_t nTotSelected = 0;
-  Double_t nTotExpected = 0;
-  printf("Selection:\t   eeqq\t   mmqq\t   ptqq\t   jtqq\t   ttqq\t  total\n");
-  // loop over all signals (rows)
-  for (Int_t sig = 0; sig < gMaxSignal; sig++) {
-    // for each selection the efficiency
-    TH1D * hSelect = addperiod(sig, "hSelect", 0, 0, 0, 0);
-    // the ORed combination of all analysis
-    TH1D * hFinal  = addperiod(sig, "hLm5c", 0, 0, 0, 0);
-//      ceffi->cd(sig+1);
-//      hSelect->Draw();
-    printf("Signal %s:\t", gProcess[sig].fname);
-    // compute number of expected events for this signal
-    Double_t nExpected = 0;
-    for (Int_t period = gStart; period <= gEnd; period++) {
-      nExpected += 
-	gLumi[period] * gProcessInfo[period][sig].xs;
-    }
-    // loop over selection (columns)
-    for (Int_t sel = 0; sel < 4; sel++) {
-      // compute number of selected events for this selection
-      Double_t nSelected = 0;
-      for (Int_t SelectFlag = 0; SelectFlag < 16; SelectFlag++) {
-	if (SelectFlag & (1 << sel)) {
-	  nSelected += hSelect->GetBinContent(1+SelectFlag);
-	}
-      }
-      // for each selection separately
-      effi = nSelected/nExpected;
-      printf("%7.2f\t", 100.0 * effi);
-    }
-    // combination for tau
-    // compute number of selected events for tau's only
-    Double_t nSelected = 0;
-    for (Int_t SelectFlag = 0; SelectFlag < 15; SelectFlag++) {
-      if ((SelectFlag & 4) || (SelectFlag & 8))
-	nSelected += hSelect->GetBinContent(1+SelectFlag);
-    }
-    effi = nSelected / nExpected;
-    printf("%7.2f\t", 100.0 * effi);
-    // output total efficiency from final histogram
-    nSelected = hFinal->Integral();
-    printf("%7.2f\t", 100.0*nSelected/nExpected);
-    printf("\n");
-    // update global counters
-    nTotSelected += nSelected;
-    nTotExpected += nExpected;
-    // delete histograms
-    delete hFinal;
-    delete hSelect;
-  }
-  printf("---------------------------------------------------------------\n");
-  printf("all signals:\t\t\t\t\t\t%7.2f\n", 
-	 100.0*nTotSelected/nTotExpected);
+  delete[] nExpected;
+  delete[] nGene;
+  delete[] nEvents;
+  delete[] weight;
 }
 
 void chi2(Double_t low = 0, Double_t up = 0)
@@ -384,6 +328,7 @@ void loglikdistrib(Int_t ntrials = 10000, Bool_t print = kFALSE)
   TH1D * htest = new TH1D(*hdata);
   TH1D * lldistrib = new TH1D("lldistrib", "log(Likelihood) distribution", 
 			      1000, loglik-200, loglik+200);
+  setopt(lldistrib);
   for (Int_t n = 0; n < ntrials; n++) {
     // generate poisson around theorie
     for (Int_t i = 1; i <= nbins; i++) {
@@ -393,17 +338,11 @@ void loglikdistrib(Int_t ntrials = 10000, Bool_t print = kFALSE)
   }
   TCanvas * llcanvas = new TCanvas("llcanvas", "Log(Likelihood) distribution", 
 				   40, 40, 800, 600);
+  setopt(llcanvas);
   lldistrib->SetFillColor(kYellow);
   lldistrib->Draw();
-  lldistrib->GetXaxis()->CenterTitle();
   lldistrib->GetYaxis()->SetTitle("Anzahl Ereignisse");
   lldistrib->GetXaxis()->SetTitle("-ln L");
-  lldistrib->GetXaxis()->SetLabelSize(0.05);
-  lldistrib->GetXaxis()->SetTitleSize(0.05);
-  lldistrib->GetXaxis()->SetTitleOffset(1.1);
-  lldistrib->GetYaxis()->SetLabelSize(0.05);
-  lldistrib->GetYaxis()->SetTitleSize(0.05);
-  lldistrib->GetYaxis()->SetTitleOffset(1.5);
   // autozoom
   Int_t lowbin = 1;
   while (lldistrib->GetBinContent(lowbin) == 0)
@@ -453,22 +392,28 @@ void searchcut(Bool_t low)
     hpuri = new TH1D * [gMaxSignal];
   if (hep == 0)
     hep   = new TH1D * [gMaxSignal];
-
-  TCanvas * cep = new TCanvas("cep", "efficiency and purity", 
-			       10,10, 600*TMath::Sqrt(2.), 600);
-  cep->cd();
+  for (Int_t i = 0; i < gMaxSignal; i++) {
+    heffi[i] = 0;
+    hpuri[i] = 0;
+    hep[i] = 0;
+  }
 
   // look for a histogram
   Int_t start = FindFirstHisto();
   if (start < 0) 
     return;
 
+  DEBUG("first histogram found: " << gProcess[start].fname);
+
   // norm purity to total number of events
   TH1D * htotal = new TH1D(*gHisto[gPadNr][start]);
+  DEBUG("Total number of MC events: " << htotal->Integral());
 
   // look at each histo for itself
   decompose();
+
   for (Int_t process = 0; process < gMaxSignal; process++) {
+    DEBUG("processsing " << gProcess[process].fname);
     // delete old histos
     if (heffi[process]) {
       delete heffi[process];
@@ -483,20 +428,22 @@ void searchcut(Bool_t low)
       hep[process] = 0;
     }
     // skip non-existing mc's
-    if (gHisto[gPadNr][process] == 0)
+    TH1D * histo = gHisto[gPadNr][process];
+    if (histo == 0)
       continue;
     // create corresponding histograms
-    heffi[process] = new TH1D(*gHisto[gPadNr][process]);
+    heffi[process] = new TH1D(*histo);
     heffi[process]->Reset();
-    hpuri[process] = new TH1D(*gHisto[gPadNr][process]);
+    hpuri[process] = new TH1D(*histo);
     hpuri[process]->Reset();
-    hep[process] = new TH1D(*gHisto[gPadNr][process]);
+    hep[process] = new TH1D(*histo);
     hep[process]->Reset();
     Double_t effi;
     Double_t puri;
     Double_t summc    = 0;
     Double_t sumtotal = 0;
-    Double_t nMc      = gHisto[gPadNr][gOrder[gPadNr][process]]->Integral();
+    Double_t nMc      = gHisto[gPadNr][process]->Integral();
+    DEBUG("This process has " << nMc << " events");
     // make effi and puri distribution
     if (low) {
       for (Int_t bin = heffi[process]->GetNbinsX(); bin > 1; bin--) {
@@ -534,18 +481,29 @@ void searchcut(Bool_t low)
   delete htotal;
   // draw histograms
   for (Int_t process = 0; process < gMaxSignal; process++) {
+    if (gHisto[gPadNr][process] == 0)
+      continue;
+    TCanvas * cep = new TCanvas(Form("cep_%d", process), 
+				Form("efficiency and purity for %s", 
+				     gProcess[process].fname), 
+				10*process,10*process, 
+				(Int_t) (600*TMath::Sqrt(2.)), 
+				600);
+    cep->cd();
     heffi[process]->SetMaximum(1.1);
     hpuri[process]->SetMaximum(1.1);
-    if (process == 0) {// first
-      heffi[process]->Draw();
-    }
-    else {
-      heffi[process]->Draw("same");
-    }
+    heffi[process]->Draw();
     hpuri[process]->Draw("same");
     hep[process]->Draw("same");
+    // Add a legend
+    TLegend * l = new TLegend(0.720, 0.5, 0.92, 0.92, gProcess[process].tname);
+    setopt(l);
+    l->AddEntry(heffi[process], "Efficiency", "l");
+    l->AddEntry(hpuri[process], "Purity", "l");
+    l->AddEntry(hep[process], "effi*puri", "l");
+    l->Draw();
     // output optimal cut values to user
-    printf("Optimal cut value for mc %s: %8.4f\n", 
+    printf("Optimal cut value for process %s: %8.4f\n", 
 	   gProcess[process].fname,
 	   hep[process]->GetBinLowEdge(hep[process]->GetMaximumBin()));
   }
@@ -616,7 +574,7 @@ void integral(Bool_t up = kTRUE, Bool_t draw=kTRUE)
   // draw
   if (draw) {
     TCanvas * integ = new TCanvas("integ", "integral distribution", 
-				  10,10, 600*TMath::Sqrt(2.), 600);
+				  10,10, (Int_t) (600*TMath::Sqrt(2.)), 600);
     setopt(integ);
     hintmc->Draw();
     hintdata->Draw("epsame");
