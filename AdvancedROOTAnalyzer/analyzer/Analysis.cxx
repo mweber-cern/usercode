@@ -20,6 +20,9 @@
 
 using namespace std;
 
+// externally generated with 
+extern TH1D * get_cutflow_histogram();
+
 // return true if a ROOT file named "fileName" exists
 Bool_t check_root_file(const char * fileName)
 {
@@ -39,7 +42,7 @@ Bool_t check_root_file(const char * fileName)
 
 Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   : TreeContent(& inputTree) , fInputTree(inputTree), fOutputTree(outputTree),
-    fCfgFile(cfgFile), fWeight(1.)
+    fCfgFile(cfgFile)
 {
   //////////////////////////////////////////////////////////////////////
   // Configuration options
@@ -120,6 +123,9 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
     }
     delete fakeRateFileName;
   }
+  fFakeRate[0] = 0.;
+  fFakeRate[1] = 0.;
+  fFakeWeight = 0.;
 }
 
 Analysis::~Analysis()
@@ -332,9 +338,9 @@ void Analysis::SignalStudy()
   sort(particles['l'].begin(), particles['l'].end(), comp);
   int id1 = particles['l'][0];
   int id2 = particles['l'][1];
-  TLorentzVector mu1(truth_px[id1], truth_py[id1], truth_pz[id1], truth_E[id1]);
-  TLorentzVector mu2(truth_px[id2], truth_py[id2], truth_pz[id2], truth_E[id2]);
-  Fill("Sig_MuMass", (mu1+mu2).M());
+  fSigMu[0].SetXYZT(truth_px[id1], truth_py[id1], truth_pz[id1], truth_E[id1]);
+  fSigMu[1].SetXYZT(truth_px[id2], truth_py[id2], truth_pz[id2], truth_E[id2]);
+  Fill("Sig_MuMass", (fSigMu[0]+fSigMu[1]).M());
   Fill("Sig_MuDPhi", DeltaPhi(truth_phi[id1], truth_phi[id2]));
   Fill("Sig_MuDEta", TMath::Abs(truth_eta[id1]-truth_eta[id2]));
   Fill("Sig_MuDPt", TMath::Abs(truth_pt[id1]-truth_pt[id2]));
@@ -346,9 +352,9 @@ void Analysis::SignalStudy()
   sort(particles['q'].begin(), particles['q'].end(), comp);
   int id3 = particles['q'][0];
   int id4 = particles['q'][1];
-  TLorentzVector q3(truth_px[id3], truth_py[id3], truth_pz[id3], truth_E[id3]);
-  TLorentzVector q4(truth_px[id4], truth_py[id4], truth_pz[id4], truth_E[id4]);
-  Fill("Sig_JetMass", (q3+q4).M());
+  fSigJet[0].SetXYZT(truth_px[id3], truth_py[id3], truth_pz[id3], truth_E[id3]);
+  fSigJet[1].SetXYZT(truth_px[id4], truth_py[id4], truth_pz[id4], truth_E[id4]);
+  Fill("Sig_JetMass", (fSigJet[0]+fSigJet[1]).M());
   Fill("Sig_JetDPhi", DeltaPhi(truth_phi[id3], truth_phi[id4]));
   Fill("Sig_JetDEta", TMath::Abs(truth_eta[id3]-truth_eta[id4]));
   Fill("Sig_JetDPt", TMath::Abs(truth_pt[id3]-truth_pt[id4]));
@@ -356,10 +362,12 @@ void Analysis::SignalStudy()
   Fill("Sig_JetPt", truth_pt[id3], truth_pt[id4]);
 
   // look at jets and leptons
-  Fill("Sig_Mass3", (mu2+q3+q4).M());
+  TLorentzVector neutralino = fSigMu[1]+fSigJet[0]+fSigJet[1];
+  Fill("Sig_Mass3", neutralino.M());
+  Fill("Sig_Angle3", neutralino.DeltaPhi(fSigMu[0]));
   double DeltaR = TMath::Min(
-    TMath::Min(mu1.DeltaR(q3), mu1.DeltaR(q4)),
-    TMath::Min(mu2.DeltaR(q3), mu2.DeltaR(q4))
+    TMath::Min(fSigMu[0].DeltaR(fSigJet[0]), fSigMu[0].DeltaR(fSigJet[1])),
+    TMath::Min(fSigMu[1].DeltaR(fSigJet[0]), fSigMu[1].DeltaR(fSigJet[1]))
     );
   Fill("Sig_MuIsoR", DeltaR);
 
@@ -491,6 +499,7 @@ void Analysis::Loop()
   if (fMaxEvents > 0)
     INFO("Stopping after fMaxEvents = " << fMaxEvents);
 
+  bool firstWarnWeight = true;
   for (Long64_t jentry=0; jentry < nentries && (jentry < fMaxEvents || fMaxEvents < 0) ; jentry++) {
     Long64_t ientry = LoadTree(jentry);
     if (ientry < 0)
@@ -536,6 +545,10 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // Split RPV SUSY in RPV signal and RPV background
+    fSigMu[0].SetXYZT(0, 0, 0, 0);
+    fSigMu[1].SetXYZT(0, 0, 0, 0);
+    fSigJet[0].SetXYZT(0, 0, 0, 0);
+    fSigJet[1].SetXYZT(0, 0, 0, 0);
     if (fInputType == "signal" || fInputType == "background") {
       SignalStudy();
       // take only signal events or background events if requested
@@ -544,14 +557,17 @@ void Analysis::Loop()
     }
 
     FillNoWeight("log_global_weight", TMath::Log(global_weight)/TMath::Log(10.));
-    fWeight = 1; /* @todo after signal bugfix: fWeight = global_weight; */
+    if (global_weight != 1 && firstWarnWeight) {
+      WARNING("Initial weights are not 1.");
+      firstWarnWeight = false;
+    }
 
     Fill("cutflow", "weight");
 
     //////////////////////////////////////////////////////////////////////
     // pileup reweighting
     if (fInputType == "mc" || fInputType == "signal" || fInputType == "background") {
-      fWeight *= LumiWeights_.weight3D(pu_num_int[0], pu_num_int[1], pu_num_int[2]);
+      global_weight *= LumiWeights_.weight3D(pu_num_int[0], pu_num_int[1], pu_num_int[2]);
     }
 
     Fill("cutflow", "pileup rew.");
@@ -615,7 +631,10 @@ void Analysis::Loop()
 	}
       }
       else if (fAnalysisType == "tightloose") {
-	if (fTrigger->Contains("HLT_Mu8_Jet40")) {
+	if (fTrigger->Contains("HLT_Mu8_Jet40") ||
+	    fTrigger->Contains("HLT_Mu8") ||
+	    fTrigger->Contains("HLT_Mu15")
+	  ) {
 	  rejection = false;
 	  break;
 	}
@@ -745,24 +764,65 @@ void Analysis::Loop()
     }
     int nMuon = muons.size();
 
+    //////////////////////////////////////////////////////////////////////
+    // loose and tight muon id - add isolation and trigger matching
+    vector <int> loose_muons;
+    vector <int> tight_muons;
+    for (int i = 0; i < nMuon; i++) {
+      // Trigger matching
+      Int_t matched = 0;
+      for (int k = 0; k < muo_trign[muons[i]]; k++) {
+	*fTrigger = unpack(trig_name[muo_trig[muons[i]][k]]);
+	if (fAnalysisType == "tightloose") {
+	  if (fTrigger->Contains("HLT_Mu8") ||
+	      fTrigger->Contains("HLT_Mu15") ||
+	      fTrigger->Contains("HLT_Mu8_Jet40")) {
+	    matched++;
+	  }
+	}
+	else {
+	  if (fTrigger->Contains("HLT_DoubleMu7") ||
+	      fTrigger->Contains("HLT_DoubleMu6") ||
+	      fTrigger->Contains("HLT_Mu13_Mu7_v") ||
+	      fTrigger->Contains("HLT_Mu13_Mu8_v") || 
+	      fTrigger->Contains("HLT_Mu17_Mu8_v") || 
+	      fTrigger->Contains("HLT_Mu17_TkMu8_v")) {
+	    matched++;
+	  }
+	}
+      }
+      Fill("nMuon_matched", matched);
+      if (matched == 0)
+	continue;
+
+      // relative isolation
+      double relIso = 1000.;
+      int m = muons[i];
+      double E = muo_TrkIso[m] + muo_ECalIso[m] + muo_HCalIso[m];
+      if (muo_pt[m] < 20.) { 
+	relIso = E / 20.;
+      }
+      else {
+	relIso = E / muo_pt[m];
+      }
+
+      Fill("nMuon_relIso", relIso);
+      if (relIso < 0.4) {
+	loose_muons.push_back(muons[i]);
+      }
+      if (relIso < 0.15) {
+	tight_muons.push_back(muons[i]);
+      }
+    }
+    Int_t nMuonsLoose = loose_muons.size();
+    Int_t nMuonsTight = tight_muons.size();
+
     // Jets
     // https://twiki.cern.ch/twiki/bin/view/CMS/JetID
     double HT = 0;
     vector <int> jets;
     TCutList JetCuts;
     for (int i = 0; i < pfjet_n; i++) {
-      // A muon might be reconstructed as a PF jet. Therefore take
-      // only those PF jets that do not "coincide" with the muon
-      double Rmin = 1000;
-      TLorentzVector jet(pfjet_px[i], pfjet_py[i], pfjet_pz[i], pfjet_E[i]);
-      for (int j = 0; j < nMuon; j++) {
-	TLorentzVector mu(muo_px[muons[j]], muo_py[muons[j]], muo_pz[muons[j]],
-			  muo_E[muons[j]]);
-	double R = mu.DeltaR(jet);
-	if (R < Rmin)
-	  Rmin = R;
-      }
-
       // set cuts
       JetCuts.Set("pfjet_pt", pfjet_pt[i] > 30.);
       JetCuts.Set("pfjet_eta", fabs(pfjet_eta[i]) < 2.4);
@@ -772,7 +832,6 @@ void Analysis::Loop()
       JetCuts.Set("pfjet_pff_2", pfjet_PFF[i][2] < 0.99);
       JetCuts.Set("pfjet_pff_3", pfjet_PFF[i][3] < 0.99);
       JetCuts.Set("pfjet_pfn_0", pfjet_PFN[i][0] > 0);
-      JetCuts.Set("pfjet_muo_deltaR", Rmin > 0.05);
 
       // N-1 histograms
       if (JetCuts.PassesAllBut("pfjet_pt"))
@@ -791,8 +850,6 @@ void Analysis::Loop()
 	Fill("nPfJet_pff_3", pfjet_PFF[i][3]);
       if (JetCuts.PassesAllBut("pfjet_pfn_0"))
 	Fill("nPfJet_pfn_0", pfjet_PFN[i][0]);
-      if (JetCuts.PassesAllBut("pfjet_muo_deltaR"))
-	Fill("nPfJet_muo_deltaR", Rmin);
 
       // apply cuts
       if (JetCuts.PassesAll()) {
@@ -803,64 +860,61 @@ void Analysis::Loop()
     int nJets = jets.size();
 
     //////////////////////////////////////////////////////////////////////
-    // loose muon id
-    vector <int> loose_muons;
-    for (int i = 0; i < nMuon; i++) {
-      double Rmin = 1000.;
-      TLorentzVector muon(muo_px[muons[i]], muo_py[muons[i]], muo_pz[muons[i]],
-			  muo_E[muons[i]]);
-      for (int j = 0; j < nJets; j++) {
-	TLorentzVector jet(pfjet_px[j], pfjet_py[j], pfjet_pz[j], pfjet_E[j]);
-	double R = jet.DeltaR(muon);
-	if (R < Rmin)
-	  Rmin = R;
-      }
-      // muon isolation cuts
-      if (muo_TrkIso[muons[i]] <= 10. &&
-	  muo_ECalIso[muons[i]] <= 10. &&
-	  muo_HCalIso[muons[i]] <= 10. &&
-	  Rmin >= 0.2) {
-	loose_muons.push_back(muons[i]);
-      }
-    }
-    Int_t nMuonsLoose = loose_muons.size();
+    // muon/jet arbitration
 
-    //////////////////////////////////////////////////////////////////////
-    // tight muon id
-    vector <int> tight_muons;
-    for (int i = 0; i < nMuon; i++) {
-      double Rmin = 1000.;
-      TLorentzVector muon(muo_px[muons[i]], muo_py[muons[i]], muo_pz[muons[i]],
-			  muo_E[muons[i]]);
+    for (int i = 0; i < nMuonsTight; i++) {
+      Int_t m = tight_muons[i];
+      TLorentzVector mu(muo_px[m], muo_py[m], muo_pz[m], muo_E[m]);
+      // A muon might be reconstructed as a PF jet. Therefore take
+      // only those PF jets that do not "coincide" with a tight muon
+      double Rmin = 1000;
+      Int_t jet_min = -1;
       for (int j = 0; j < nJets; j++) {
 	TLorentzVector jet(pfjet_px[j], pfjet_py[j], pfjet_pz[j], pfjet_E[j]);
-	double R = jet.DeltaR(muon);
-	if (R < Rmin)
+	double R = mu.DeltaR(jet);
+	if (R < Rmin) {
 	  Rmin = R;
+	  jet_min = j;
+	}
       }
-      // muon isolation cuts
-      if (muo_TrkIso[muons[i]] <= 2. &&
-	  muo_ECalIso[muons[i]] <= 2. &&
-	  muo_HCalIso[muons[i]] <= 2. &&
-	  Rmin >= 0.4) {
-	tight_muons.push_back(muons[i]);
+      Fill("MJ_rmin", Rmin);
+      if (jet_min > 0 && Rmin < 0.4) {
+	Fill("MJ_EF", muo_E[i]/pfjet_E[jet_min]);
+	Fill("MJ_EE", muo_E[i], pfjet_E[jet_min]);
+	// use MC to help if there is a signal particle close
+	if (fIsSignal) {
+	  double min_mu_dR = TMath::Min(
+	    mu.DeltaR(fSigMu[0]), mu.DeltaR(fSigMu[1])
+	    );
+	  Fill("MJ_mu_dR", min_mu_dR);
+	  double min_jet_dR = TMath::Min(
+	    mu.DeltaR(fSigJet[0]), mu.DeltaR(fSigMu[1])
+	    );
+	  Fill("MJ_jet_dR", min_jet_dR);
+	  Fill("MJ_dR", min_mu_dR, min_jet_dR);
+	}
+	// no arbitration, ignore events with overlap
+	continue;
       }
     }
-    Int_t nMuonsTight = tight_muons.size();
+
+    Fill("cutflow", "objectID");
 
     //////////////////////////////////////////////////////////////////////
     // Event cleaning
 
+    Fill("noise_ecal_r9", noise_ecal_r9);
+    Fill("nElectron", nElectron);
+    Fill("HBHE_Noise", filterNoise() ? 1 : 0);
     // require good vertex, but no electron in event, and no ecal noise
-    if (nVertex < 1 || nElectron > 0 || noise_ecal_r9 > 0.9) {
+    if (nVertex < 1 || nElectron > 0 || noise_ecal_r9 > 0.9 || !filterNoise()) {
       continue;
     }
 
     Fill("cutflow", "cleaning");
 
     //////////////////////////////////////////////////////////////////////
-    // @todo: Trigger matching
-
+    // fake rate study: tight-to-loose ratio calculation
     if (fAnalysisType == "tightloose") {
       TightLooseRatioCalculation(loose_muons, tight_muons, jets, HT);
       Fill("cutflow", "tightloose");
@@ -869,113 +923,97 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // loose jet id
+    Fill("Jet_pt0", nJets > 0 ? pfjet_pt[jets[0]] : 0);
+    Fill("Jet_pt1", nJets > 1 ? pfjet_pt[jets[1]] : 0);
+    Fill("Jet_pt", nJets > 0 ? pfjet_pt[jets[0]] : 0, nJets > 1 ? pfjet_pt[jets[1]] : 0);
     if (nJets < 2 || pfjet_pt[jets[0]] <= 30. || pfjet_pt[jets[1]] <= 30.) {
       continue;
     }
-
     Fill("cutflow", "jetid");
-
+    
     //////////////////////////////////////////////////////////////////////
-    // muon requirements
-    if (nMuon < 2 || muo_pt[muons[0]] <= 20. || muo_pt[muons[1]] <= 15.) {
-      continue;
-    }
-
-    Fill("cutflow", "muonid");
-
-    int muo_id[2] = { -1 };
     // two muon requirements
+    Fill("Muon_nloose", nMuonsLoose);
+    Fill("Muon_ntight", nMuonsTight);
+    Fill("Muon_loosetight", nMuonsLoose, nMuonsTight);
     if (fAnalysisType == "doublefake") {
-      double fake_weight = 1.;
       // require two loose muons which are not tight
-      Fill("DF_nloose", nMuonsLoose);
-      Fill("DF_ntight", nMuonsTight);
-      Fill("DF_loosetight", nMuonsLoose, nMuonsTight);
       if (nMuonsLoose != 2 || nMuonsTight != 0)
 	continue;
-      muo_id[0] = loose_muons[0];
-      muo_id[1] = loose_muons[1];
-      
+
+      fMuoId[0] = loose_muons[0];
+      fMuoId[1] = loose_muons[1];
+
       for (int n = 0; n < 2; n++) {
-	double ratio = 0;
-	if (fFakeRateDimensions == 3) {
-	  Int_t bin = fFakeRateHisto3D->FindFixBin(muo_pt[muo_id[n]],
-						   fabs(muo_eta[muo_id[n]]),
-						   pfjet_pt[jets[0]]);
-	  ratio = fFakeRateHisto3D->GetBinContent(bin);
-	}
-	else if (fFakeRateDimensions == 2) {
-	  Int_t bin = fFakeRateHisto2D->FindFixBin(muo_pt[muo_id[n]],
-						   fabs(muo_eta[muo_id[n]]));
-	  ratio = fFakeRateHisto2D->GetBinContent(bin);
-	}
-	if (ratio < 0. || ratio >= 1.) {
-	  THROW("insane value " + std::string(Form("%f", ratio)) + " for tight/loose ratio");
-	}
-	fake_weight *= ratio/(1.-ratio);
+	int m = fMuoId[n];
+	fFakeRate[n] = GetFakeRate(muo_pt[m], fabs(muo_eta[m]), pfjet_pt[jets[0]]);
+	Fill("DF_pt", muo_pt[m]);
+	Fill("DF_eta", fabs(muo_eta[m]));
       }
+
+      // weights
+      double w0 = 1.-fFakeRate[0];
+      double w1 = 1.-fFakeRate[1];
+      // to be used for event subtraction in single orthogonal sample
+      fFakeWeight = fFakeRate[0]/w0 + fFakeRate[1]/w1;
+      // double orthogonal sample
+      global_weight *= fFakeRate[0]/w0 * fFakeRate[1]/w1;
       Fill("cutflow", "doublefake");
-      fWeight *= fake_weight;
-      Fill("cutflow", "df_weight");
     }
     else if (fAnalysisType == "singlefake") {
       // require one loose muon which is not tight and one tight muon
       if (nMuonsTight != 1 || nMuonsLoose != 2)
 	continue;
-      double fake_weight = 1.;
-      muo_id[0] = tight_muons[0];
+
+      fMuoId[0] = tight_muons[0];
       // find loose muon which is not tight muon
       for (int n = 0; n < nMuonsLoose; n++) {
-	if (loose_muons[n] != tight_muons[0])
-	  muo_id[1] = n;
-
+	if (loose_muons[n] == tight_muons[0])
+	  continue;
+	fMuoId[1] = n;
+      
 	// weighting with T/L ratio
-	double ratio = 0;
-	if (fFakeRateDimensions == 3) {
-	  Int_t bin = fFakeRateHisto3D->FindFixBin(muo_pt[muo_id[n]],
-						   fabs(muo_eta[muo_id[n]]),
-						   pfjet_pt[jets[0]]);
-	  ratio = fFakeRateHisto3D->GetBinContent(bin);
-	}
-	else if (fFakeRateDimensions == 2) {
-	  Int_t bin = fFakeRateHisto2D->FindFixBin(muo_pt[muo_id[n]],
-						   fabs(muo_eta[muo_id[n]]));
-	  ratio = fFakeRateHisto2D->GetBinContent(bin);
-	}
-	if (ratio <= 0. || ratio >= 1.) {
-	  THROW("insane value " + std::string(Form("%f", ratio)) + " for tight/loose ratio");
-	}
-	
-	// swap IDs if necessary (in order to preserve ordering)
-	if (muo_id[0] > muo_id[1]) {
-	  int temp = muo_id[0];
-	  muo_id[0] = muo_id[1];
-	  muo_id[1] = temp;
-	}
-	fake_weight *= ratio/(1.-ratio);
+	int m = fMuoId[n];
+	fFakeRate[0] = GetFakeRate(muo_pt[m], fabs(muo_eta[m]), pfjet_pt[jets[0]]);
+	Fill("SF_pt", muo_pt[m]);
+	Fill("SF_eta", fabs(muo_eta[m]));
       }
-      fWeight *= fake_weight;
+
+      // swap IDs if necessary (in order to preserve pt ordering)
+      if (fMuoId[0] > fMuoId[1]) {
+	int temp = fMuoId[0];
+	fMuoId[0] = fMuoId[1];
+	fMuoId[1] = temp;
+      }
+      // event weight
+      global_weight *= fFakeRate[0]/(1-fFakeRate[0]);
       Fill("cutflow", "singlefake");
-      // nothing more to do here
-      continue;
     }
     else if (fAnalysisType == "standard") {
       if (nMuonsTight != 2) {
 	continue;
       }
-      muo_id[0] = tight_muons[0];
-      muo_id[1] = tight_muons[1];
+      fMuoId[0] = tight_muons[0];
+      fMuoId[1] = tight_muons[1];
+      Fill("cutflow", "standard");
     }
 
-    // apply muon criteria
-    if (muo_pt[muo_id[0]] <= 20. ||
-	muo_pt[muo_id[1]] <= 15. ||
-	fabs(muo_dzbsCm[muo_id[0]]-muo_dzbsCm[muo_id[1]]) > 0.08) {
+    //////////////////////////////////////////////////////////////////////
+    // selection
+
+    // TCutList selectionCuts;
+    // selectionCuts.Set(muo
+    Fill("Muon_pt0", muo_pt[fMuoId[0]]);
+    Fill("Muon_pt1", muo_pt[fMuoId[1]]);
+    Fill("Muon_pt", muo_pt[fMuoId[0]], muo_pt[fMuoId[1]]);
+    if (muo_pt[fMuoId[0]] <= 20. ||
+	muo_pt[fMuoId[1]] <= 15. ||
+	fabs(muo_dzbsCm[fMuoId[0]]-muo_dzbsCm[fMuoId[1]]) > 0.08) {
       continue;
     }
+    Fill("cutflow", "muonID");
 
-    Fill("cutflow", "muontight");
-
+    Fill("pfmet", met_et[3]);
     /// Particle flow MET
     if (met_et[3] >= 50.) {
       continue;
@@ -983,15 +1021,15 @@ void Analysis::Loop()
 
     Fill("cutflow", "met");
 
-    TLorentzVector mu0(muo_px[muo_id[0]], muo_py[muo_id[0]],
-		       muo_pz[muo_id[0]], muo_E[muo_id[0]]);
-    TLorentzVector mu1(muo_px[muo_id[1]], muo_py[muo_id[1]],
-		       muo_pz[muo_id[1]], muo_E[muo_id[1]]);
+    TLorentzVector mu0(muo_px[fMuoId[0]], muo_py[fMuoId[0]],
+		       muo_pz[fMuoId[0]], muo_E[fMuoId[0]]);
+    TLorentzVector mu1(muo_px[fMuoId[1]], muo_py[fMuoId[1]],
+		       muo_pz[fMuoId[1]], muo_E[fMuoId[1]]);
 
     /// needed because no MC for m(mu,mu) < 50 GeV
     double m_mumu = (mu0+mu1).M();
     /// M(mu, mu)
-    if (m_mumu < 50.) {
+    if (m_mumu < 15.) {
       continue;
     }
 
@@ -1009,8 +1047,10 @@ void Analysis::Loop()
       Fill("vtx_z", vtx_z[i]);
     }
 
-    /// muon charge
-    if ((muo_charge[muo_id[0]]*muo_charge[muo_id[1]]) == -1) {
+    // muon charge
+    Fill("Muon_charge", muo_charge[fMuoId[0]], muo_charge[fMuoId[1]]);
+    Fill("Muon_ch", muo_charge[fMuoId[0]]*muo_charge[fMuoId[1]]);
+    if ((muo_charge[fMuoId[0]]*muo_charge[fMuoId[1]]) == -1) {
       continue;
     }
 
@@ -1018,17 +1058,13 @@ void Analysis::Loop()
 
     Fill("m_mumu", m_mumu);
     Fill("muo_n", muo_n);
-    FillNoWeight("weight", fWeight);
-    FillNoWeight("log_weight", TMath::Log(fWeight)/TMath::Log(10.));
+    FillNoWeight("log_weight", TMath::Log(global_weight)/TMath::Log(10.));
 
     //////////////////////////////////////////////////////////////////////
     // fill output tree
     if (fFill)
       fOutputTree.Fill();
   }
-  //////////////////////////////////////////////////////////////////////
-  // deflate labels in cutflow histogram
-  histo["cutflow"]->LabelsDeflate();
 }
 
 void Analysis::CreateHistograms()
@@ -1045,8 +1081,11 @@ void Analysis::CreateHistograms()
   TFile * outFile = fOutputTree.GetCurrentFile();
   outFile->cd();
 
-  // cut flow
-  CreateHisto("cutflow", "cut flow", 1, 0, 1);
+  // cut flow - nasty workaround due to ROOTs problems with histograms filled with strings
+  histo["cutflow"] = get_cutflow_histogram();
+  const Int_t firstrun = 160404;
+  const Int_t lastrun  = 180252;
+  CreateHisto("runnumber", "Run number", lastrun-firstrun+1, firstrun, lastrun+1);
 
   // signal histograms
   CreateHisto("Sig_nMuon", "Signal MC truth: number of muons in final state", 10, -0.5, 9.5);
@@ -1083,7 +1122,8 @@ void Analysis::CreateHistograms()
   CreateHisto("Sig_JetPt", "p_{T}(q_{1}):p_{T}(q_{2})@GeV", 50, 0, 100, 50, 0, 100);
 
   // combine leptons and quarks
-  CreateHisto("Sig_Mass3", "m(#mu_{2}, q_{1}, q_{2})@GeV", 500, 0, 500);
+  CreateHisto("Sig_Mass3", "m(#tilde{#chi}^{0}_{1})@GeV", 500, 0, 500);
+  CreateHisto("Sig_Angle3", "#Delta#phi(#mu, #tilde{#chi}^{0}_{1})@GeV", 314, 0, 3.14);
   CreateHisto("Sig_MuIsoR", "smallest #DeltaR between any jet and any muon", 100, 0, 5);
 
   // only for signal
@@ -1100,7 +1140,7 @@ void Analysis::CreateHistograms()
   CreateHisto("nSkim_muo_pt0", "pt of leading muon", 500, 0, 500);
   CreateHisto("nSkim_muo_pt1", "pt of second muon (skimmer cuts)", 500, 0, 500);
 
-  // Pileup reweighting, event cleaning
+  // Pileup reweighting
   CreateHisto("vtx_n", "Number of vertices in event", 50, -0.5, 49.5);
   CreateHisto("vtx_ntr", "Number tracks in vertex", 151, -0.5, 150.5);
   CreateHisto("vtx_ndof", "Number of deegrees of freedom of vertex", 151, -0.5, 150.5);
@@ -1125,8 +1165,15 @@ void Analysis::CreateHistograms()
   CreateHisto("nMuon_hitsCm", "combined muon hits", 20, 0, 20);
   CreateHisto("nMuon_ChambersMatched", "matched muon chambers", 20, 0, 20);
   CreateHisto("nMuon_d0Tk", "#mu impact parameter wrt vertex from inner track@cm", 100, 0, 10);
-  CreateHisto("nMuon_ValidPixelHitsCm", "#mu pixel hits", 5, 0, 5);
+  CreateHisto("nMuon_ValidPixelHitsCm", "#mu pixel hits", 5, -0.5, 4.5);
   CreateHisto("nMuon_ValidTrackerHitsCm", "#mu tracker hits", 25, 0, 25);
+  
+  CreateHisto("Muon_nloose", "number of loose muons", 5, -0.5, 4.5);
+  CreateHisto("Muon_ntight", "number of tight muons", 5, -0.5, 4.5);
+  CreateHisto("Muon_loosetight", "number of tight muons:number of loose muons", 5, -0.5, 4.5, 5, -0.5, 4.5);
+  // Object selection: tight/loose muons
+  CreateHisto("nMuon_relIso", "muon relative isolation", 200, 0, 10);
+  CreateHisto("nMuon_matched", "muon trigger matching", 5, -0.5, 4.5);
 
   // Object selection: jets
   CreateHisto("nPfJet_pt", "jet p_{T}", 1000, 0, 1000);
@@ -1137,11 +1184,19 @@ void Analysis::CreateHistograms()
   CreateHisto("nPfJet_pff_2", "jet energy fraction: neutral EM hadrons", 100, 0, 1);
   CreateHisto("nPfJet_pff_3", "jet energy fraction: charged EM hadrons", 100, 0, 1);
   CreateHisto("nPfJet_pfn_0", "jet energy constitutens: charged hadrons", 40, -0.5, 39.5);
-  CreateHisto("nPfJet_muo_deltaR", "min #Delta R(pf jet, muon)", 100, 0, 5);
 
-  // Object selection: loose muons
+  // Object selection: muon/jet arbitration
+  CreateHisto("MJ_rmin", "min #Delta R(#mu, jet)", 100, 0, 5);
+  CreateHisto("MJ_EF", "Energy fraction of muon in jet", 110, 0, 1.1);
+  CreateHisto("MJ_EE", "E_{#mu}:E_{jet}", 20, 0, 100, 20, 0, 100);
+  CreateHisto("MJ_mu_dR", "minimal #Delta R from muon to generated muon", 100, 0, 5);
+  CreateHisto("MJ_jet_dR", "minimal #Delta R from muon to generated jet", 100, 0, 5);
+  CreateHisto("MJ_dR", "minimal #Delta R from muon to generated jet:minimal #Delta R from muon to generated muon", 20, 0, 4, 20, 0, 4);
 
-  // Object selection: tight muons
+  // event cleaning
+  CreateHisto("noise_ecal_r9", "noise_ecal_r9", 100, 0, 1);
+  CreateHisto("nElectron", "number of electrons", 10, 0, 10);
+  CreateHisto("HBHE_Noise", "HBHE noise filter result", 2, 0, 2);
 
   // Tight-to-loose ratio
   CreateHisto("TightMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV", 
@@ -1165,21 +1220,34 @@ void Analysis::CreateHistograms()
   CreateHisto("TL_MT", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
 
   // double-fake estimate
-  CreateHisto("DF_nloose", "number of loose muons", 5, 0, 5);
-  CreateHisto("DF_ntight", "number of tight muons", 5, 0, 5);
-  CreateHisto("DF_loosetight", "number of tight muons:number of loose muons", 5, 0, 5, 5, 0, 5);
+  CreateHisto("DF_pt", "p_{T}(#mu) (doublefake)@GeV", 5, 0, 50);
+  CreateHisto("DF_eta", "#eta_{#mu} (doublefake)", 5, 0, 2.5);
+
+  // single-fake estimate
+  CreateHisto("SF_pt", "p_{T}(#mu) (doublefake)@GeV", 5, 0, 50);
+  CreateHisto("SF_eta", "#eta_{#mu} (doublefake)", 5, 0, 2.5);
+
+  // selection
+  CreateHisto("Muon_pt0", "#mu p_{T}:#mu p_{T}@GeV", 1000, 0, 1000);
+  CreateHisto("Muon_pt1", "#mu p_{T}:#mu p_{T}@GeV", 1000, 0, 1000);
+  CreateHisto("Muon_pt", "#mu p_{T}:#mu p_{T}@GeV", 20, 0, 100, 20, 0, 100);
+  CreateHisto("Jet_pt0", "jet p_{T}:jet p_{T}@GeV", 1000, 0, 1000);
+  CreateHisto("Jet_pt1", "jet p_{T}:jet p_{T}@GeV", 1000, 0, 1000);
+  CreateHisto("Jet_pt", "jet p_{T}:jet p_{T}@GeV", 20, 0, 100, 20, 0, 100);
+  CreateHisto("pfmet", "Particle flow MET@GeV", 1000, 0, 1000);
+  CreateHisto("Muon_charge", "muon charge:muon charge", 3, -1.5, 1.5, 3, -1.5, 1.5);
+  CreateHisto("Muon_ch", "muon charge:muon charge", 2, -1.5, 0.5);
 
   // create individual histograms
-  CreateHisto("noise_ecal_r9", "noise_ecal_r9", 100, 0, 1);
   CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
   CreateHisto("muo_n_cut", "Number of muons", 30, 0, 30);
   CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
   CreateHisto("muo_n", "Number of muons", 30, 0, 30);
 
   // event weights
+  CreateHisto("weight", "weight", 200, 0., 10.);
   CreateHisto("log_global_weight", "log(global_weight)", 100, -5, 5);
   CreateHisto("log_weight", "log(weight)", 100, -5, 5);
-  CreateHisto("weight", "weight", 100, 0., 2.);
 }
 
 // duplicates finder
@@ -1220,7 +1288,11 @@ void Analysis::SetBranchAddresses()
 
 void Analysis::CreateBranches()
 {
-  fOutputTree.Branch("fWeight", & fWeight, "fWeight/double");
+  fOutputTree.Branch("fFakeRate", & fFakeRate, "fFakeRate[2]/D");
+  fOutputTree.Branch("fFakeWeight", & fFakeWeight, "fFakeWeight/D");
+  fOutputTree.Branch("fMuoId", & fMuoId, "fMuoId[2]/I");
+  fOutputTree.Branch("fSigMu", & fSigMu, "fSigMu[2]/I");
+  fOutputTree.Branch("fSigJet", & fSigJet, "fSigJet[2]/I");
 }
 
 void Analysis::CreateHisto(const char * name, const char * title, Int_t nbinsx, Double_t xlow, Double_t xup)
@@ -1242,7 +1314,7 @@ void Analysis::Fill(const char * name, double value)
 {
   TH1D * h = histo[name];
   if (h != 0)
-    h->Fill(value, fWeight);
+    h->Fill(value, global_weight);
   else {
     THROW(std::string("Histogram \"") + name + std::string("\" not existing. Did you misspell or forgot to create?"));
   }
@@ -1252,7 +1324,7 @@ void Analysis::Fill(const char * name, const char * bin)
 {
   TH1D * h = histo[name];
   if (h != 0)
-    h->Fill(bin, fWeight);
+    h->Fill(bin, global_weight);
   else {
     THROW(std::string("Histogram \"") + name + std::string("\" not existing. Did you misspell or forgot to create?"));
   }
@@ -1272,7 +1344,7 @@ void Analysis::Fill(const char * name, double x, double y)
 {
   TH2D * h = histo2[name];
   if (h != 0)
-    histo2[name]->Fill(x, y, fWeight);
+    histo2[name]->Fill(x, y, global_weight);
   else {
     THROW(std::string("Histogram \"") + name + std::string("\" not existing. Did you misspell or forgot to create?"));
   }
@@ -1282,10 +1354,29 @@ void Analysis::Fill(const char * name, double x, double y, double z)
 {
   TH3D * h = histo3[name];
   if (h != 0)
-    histo3[name]->Fill(x, y, z, fWeight);
+    histo3[name]->Fill(x, y, z, global_weight);
   else {
     THROW(std::string("Histogram \"") + name + std::string("\" not existing. Did you misspell or forgot to create?"));
   }
+}
+
+double Analysis::GetFakeRate(double muopt, double eta, double jetpt)
+{
+  double fakeRate = 0.;
+  if (fFakeRateDimensions == 3) {
+    Int_t bin = fFakeRateHisto3D->FindFixBin(muopt, fabs(eta), jetpt);
+    fakeRate = fFakeRateHisto3D->GetBinContent(bin);
+  }
+  else if (fFakeRateDimensions == 2) {
+    Int_t bin = fFakeRateHisto2D->FindFixBin(muopt, fabs(eta));
+    fakeRate = fFakeRateHisto2D->GetBinContent(bin);
+  }
+  if (fakeRate <= 0. || fakeRate >= 1.) {
+    INFO("muo pt= " << muopt << ", eta = " << eta << ", jetpt = " << jetpt);
+    THROW("insane value " + std::string(Form("%f", fakeRate)) 
+	  + " for tight/loose ratio");
+  }
+  return fakeRate;
 }
 
 // helper
