@@ -46,7 +46,16 @@ def submit_condor_job(executable, arguments, inbox, outbox, jobname):
     wait = True
     while wait:
         # check how many jobs are running already
-        joblist = ara.getCommandOutput2("condor_q");
+        ntrial = 0
+        while (ntrial < 3):
+            try:
+                joblist = ara.getCommandOutput2("condor_q");
+                break
+            except RuntimeError as message:
+                print message
+                print "Waiting for condor to settle..."
+                time.sleep(60)
+                ntrial += 1
         jobcount = 0
         for line in joblist.splitlines():
             if getpass.getuser() in line:
