@@ -1430,7 +1430,7 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
     minx = 0.45;
     maxx = 0.69;
   }
-  t[gPadNr] = new TLegend(minx, miny, maxx, 0.92, "NDC");
+  t[gPadNr] = new TLegend(minx, miny, maxx, 0.92);
   setopt(t[gPadNr]);
   for (Int_t i = 0; i < gMaxProcess; i++) {
     Int_t process = gOrder[gPadNr][i]; 
