@@ -38,7 +38,6 @@ Int_t           gEnd = 0;
 TProcessInfo ** gProcessInfo = 0;
 Double_t      * gLumi = 0;
 Int_t           gMaxSignal = 0;
-Int_t           gSignal = 1;
 const char    * gSubDir = ".";
 const char    * gBase = 0;
 Bool_t          gIsColor = kTRUE;
@@ -94,12 +93,12 @@ void setopt(TStyle * style)
 
 void setopt(TCanvas * canvas)
 {
+  canvas->SetLeftMargin(0.15);
   return;
   // set default options for canvas
   canvas->SetTopMargin(0.03);
   canvas->SetRightMargin(0.05);
   canvas->SetBottomMargin(0.15);
-  canvas->SetLeftMargin(0.15);
   canvas->SetFillColor(999);
   canvas->SetFillStyle(1001);
   canvas->SetBorderSize(0);
@@ -175,13 +174,58 @@ TObject * get_object(const char * filename, const char * objectname)
   return obj;
 }
 
-// read configuration from file
-void read_config_file(const char * configFileName = "Overview.cfg")
+void delete_old_config()
 {
+  DEBUG("delete_old_config() start");
   if (gConfig) {
     delete gConfig;
     gConfig = 0;
   }
+  if (gPeriod) {
+    delete[] gPeriod;
+    gPeriod = 0;
+  }
+  if (gCuts) {
+    delete[] gCuts;
+    gCuts = 0;
+  }
+  if (gLumi) {
+    delete[] gLumi;
+    gLumi = 0;
+  }
+  for (int pad = 0; pad < gMaxPad; pad++) {
+    if (gHisto[pad]) {
+      delete[] gHisto[pad];
+      gHisto[pad] = 0;
+    }
+    if (gShadow[pad]) {
+      delete[] gShadow[pad];
+      gShadow[pad] = 0;
+    }
+    if (gOrder[pad]) {
+      delete[] gOrder[pad];
+      gOrder[pad] = 0;
+    }
+  }
+  if (gHisto2) {
+    delete[] gHisto2;
+    gHisto2 = 0;
+  }
+  // @todo: need to delete everything created with strdup_new here...
+  if (gProcess) {
+    delete[] gProcess;
+    gProcess = 0;
+  }
+  if (gBase) {
+    delete gBase;
+    gBase = 0;
+  }
+  DEBUG("delete_old_config() end");
+}
+
+// read configuration from file
+void read_config_file(const char * configFileName = "Overview.cfg")
+{
   INFO("Opening config file " << configFileName);
   gConfig = new TEnv(configFileName);
 
@@ -259,7 +303,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
     gProcess[i].tname = strdup_new(gConfig->GetValue(Form("%s.label", selector),
 						 gProcess[i].fname));
     gProcess[i].fcolor = gConfig->GetValue(Form("%s.fcolor", selector),  i);
-    gProcess[i].lcolor = gConfig->GetValue(Form("%s.lcolor", selector),  1);
+    gProcess[i].lcolor = gConfig->GetValue(Form("%s.lcolor", selector),  gProcess[i].fcolor);
     gProcess[i].lstyle = gConfig->GetValue(Form("%s.lstyle", selector),  1);
     gProcess[i].hcolor = gConfig->GetValue(Form("%s.hcolor", selector),  999);
     gProcess[i].hstyle = gConfig->GetValue(Form("%s.hstyle", selector),  1001);
@@ -346,11 +390,6 @@ void read_xs_and_lumi()
 // plot.C code are called.
 void setup(const char * configFileName = "Overview.cfg")
 {
-  // do initialization only once
-  static Bool_t initialized = kFALSE;
-  if (initialized)
-    return;
-
   INFO("Setting up plot macro");
 
   // set plot style
@@ -360,13 +399,12 @@ void setup(const char * configFileName = "Overview.cfg")
   TColor mWhite(999, 1., 1., 1., "mWhite");
 
   // read configuration file
-  read_config_file(configFileName);
+  const char * expConfigFileName = gSystem->ExpandPathName(configFileName);
+  read_config_file(expConfigFileName);
+  delete expConfigFileName;
 
   // read cross-section and lumi
   read_xs_and_lumi();
-
-  // initialization done
-  initialized = kTRUE;
 }
 
 
@@ -519,9 +557,6 @@ void readcuts()
 
 void selection(const char * subdir)
 {
-  // set up if not yet done
-  setup();
-
   // save in global variable
   if (gSubDir && strcmp(gSubDir, "."))
     delete gSubDir;
@@ -540,26 +575,25 @@ void selection(const char * subdir)
   readcuts();
 }
 
-void periods(char * startperiod, char * endperiod)
+void period(const char * startperiod, const char * endperiod)
 {
-  // select period range to be displayed
-  setup();
-
   if (endperiod == 0) {
     endperiod = startperiod;
   }
 
-  for (gStart = 0;
-       (strcmp(gPeriod[gStart], startperiod) && strcmp(gPeriod[gStart], endperiod));
-       gStart++)
-    ;
+  for (gStart = 0; gStart < gMaxPeriod; gStart++) {
+    if (!strcmp(gPeriod[gStart], startperiod))
+      break;
+  }
   if (gStart == gMaxPeriod) {
     ERROR("Period " << startperiod << " is not a valid period");
     return;
   }
 
-  for (gEnd = 0; (gPeriod[gEnd] != endperiod) && (gEnd < gMaxPeriod); gEnd++)
-    ;
+  for (gEnd = 0; gEnd < gMaxPeriod; gEnd++) {
+    if (!strcmp(gPeriod[gEnd], endperiod))
+      break;
+  }
   if (gEnd == gMaxPeriod) {
     ERROR("period " << endperiod << " is not a valid period");
       return;
@@ -749,7 +783,7 @@ Double_t GetOptMax(Int_t period, const char * hname)
   return GetOpt(period, hname, "Max");
 }
 
-TArrow * arrow(Double_t position, Int_t neighbourbins = 0)
+TArrow * arrow(Double_t position, Int_t neighbourbins)
 {
   DEBUG("start arrow");
   // print arrow to indicate a cut
@@ -757,6 +791,9 @@ TArrow * arrow(Double_t position, Int_t neighbourbins = 0)
   if (hstart < 0)
     return 0;
   Double_t fmax = gHisto[gPadNr][hstart]->GetMaximum();
+  Double_t fmin = gHisto[gPadNr][hstart]->GetMinimum();
+  DEBUG("fmax = " << fmax);
+  DEBUG("fmin = " << fmin);
   TAxis * axis = gHisto[gPadNr][hstart]->GetXaxis();
   if (axis == 0) {
     ERROR("No axis found");
@@ -774,14 +811,19 @@ TArrow * arrow(Double_t position, Int_t neighbourbins = 0)
       }
     }
   }
+  DEBUG("fbottom = " << fbottom);
   Double_t ftop;
   if (gPad->GetLogy() == 0) {
     fbottom += fmax * 0.1;
-    ftop     = TMath::Min(fbottom + fmax * 0.25, 0.95*fmax);
+    ftop     = TMath::Min(fbottom + fmax * 0.25, fmax);
   } else {
-    fbottom  = TMath::Log10(fbottom) + 0.1 * TMath::Log10(fmax);
-    ftop     = TMath::Min(fbottom + 0.4 * TMath::Log10(fmax), 0.95*TMath::Log10(fmax));
+    fbottom *= TMath::Power(10, 0.1*(TMath::Log10(fmax)-TMath::Log10(fmin)));
+    ftop     = TMath::Min(fbottom*TMath::Power(10, 0.25*(TMath::Log10(fmax)
+							 -TMath::Log10(fmin))), 
+			  fmax);
   }
+  DEBUG("ftop = " << ftop);
+  DEBUG("fbottom = " << fbottom);
   TArrow * a1 = new TArrow(position, ftop, position, fbottom);
   if (a1 == 0)
     return 0;
@@ -833,8 +875,10 @@ void draw(Bool_t autotitle = kTRUE)
   Bool_t first = kTRUE;   // needed for drawing first histogram without "same"
 
   // clear drawing pad and delete histograms
-  gPad->cd();
-  gPad->Clear();
+  if (gPad) {
+    gPad->cd();
+    gPad->Clear();
+  }
 
   // now draw all stacked histograms in canvas
   TH1D * histo = 0;
@@ -899,6 +943,8 @@ void draw(Bool_t autotitle = kTRUE)
     Int_t process = gOrder[gPadNr][i];
     LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
     histo = gHisto[gPadNr][process];
+    if (histo == 0)
+      continue;
     // ignore stacked histograms
     if (gProcess[process].stack)
       continue;
@@ -1353,6 +1399,67 @@ void compose()
 	gHisto[gPadNr][backmc]->Add(gHisto[gPadNr][process]);
     }
   }
+  DEBUG("leave compose");
+}
+
+/*
+ * Delete decomposed histograms
+ */
+void delete_decomposed(TH1D ** dHisto, Int_t n)
+{
+  if (n <= 0) {
+    ERROR("delete_decomposed(): Can not delete " << n << " histograms");
+    return;
+  }
+  for (int i = 0; i < n; i++) {
+    if (dHisto[i]) {
+      delete dHisto[i];
+    }
+  }
+  delete[] dHisto;
+}
+
+/**
+ * Get single histograms, not summed up, for all processes.
+ */
+TH1D ** decompose_all(bool delete_old)
+{
+  // use static variables in order to be able to delete later
+  static int n = 0;
+  static TH1D ** dHisto;
+  if (delete_old && n > 0) {
+    delete_decomposed(dHisto, n);
+  }
+  // create new histograms
+  n = gMaxProcess;
+  dHisto = new TH1D * [gMaxProcess];
+  // loop over processes
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    // histo not existing
+    if (gHisto[gPadNr][process] == 0)
+      continue;
+    // histo not stacked - already done!
+    if (gProcess[process].stack) {
+      // copy histogram
+      dHisto[process] = new TH1D(*gHisto[gPadNr][process]);
+      continue;
+    }
+    // stacked histogram - need to subtract joined histograms
+    for (Int_t j = i+1; j < gMaxProcess; j++) {
+      Int_t proc = gOrder[gPadNr][j];
+      // not joined - break loop
+      if (!gProcess[proc].join)
+	break;
+      // not existing - no need to subtract
+      if (gHisto[gPadNr][proc] == 0)
+	continue;
+      // now we have to subtract
+      dHisto[process]->Add(gHisto[gPadNr][proc], -1);
+      break;
+    }
+  }
+  return 0;
 }
 
 void decompose()
@@ -1370,9 +1477,14 @@ void decompose()
       continue;
     for (Int_t j = i+1; j < gMaxProcess-1; j++) {
       Int_t proc = gOrder[gPadNr][j];
+      // not joined - break loop
+      if (!gProcess[proc].join)
+	break;
+      // internal consistency
+      if (gProcess[proc].stack)
+	ERROR("decompose(): should not happen");
+      // not existing
       if (gHisto[gPadNr][proc] == 0)
-	continue;
-      if (!gProcess[proc].stack)
 	continue;
       gHisto[gPadNr][process]->Add(gHisto[gPadNr][proc], -1);
       break;
@@ -1398,20 +1510,30 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
 
   decompose();
 
-  // count processes that contribute with given fraction to the integral
-  Int_t num = 0;
-  for (Int_t i = 0; i < gMaxProcess; i++) {
+  // find processes that contribute with given fraction to the integral
+  double sum = 0;
+  vector<Int_t> entries;
+  for (Int_t i = gMaxProcess-1; i >=0; i--) {
     Int_t process = gOrder[gPadNr][i];
-    if (gHisto[gPadNr][process] == 0 || gProcess[process].join)
+    if (gHisto[gPadNr][process] == 0)
       continue;
-    if (gHisto[gPadNr][process]->Integral()/integral < mincontent)
+    sum += gHisto[gPadNr][process]->Integral();
+    if (gProcess[process].join) {
       continue;
-    num++;
+    }
+    if (sum/integral < mincontent) {
+      sum = 0;
+      continue;
+    }
+    // insert at beginning, since we are counting backwards
+    entries.insert(entries.begin(), process);
+    sum = 0;
   }
 
   // determine minimum
+  UInt_t num = entries.size();
   miny = TMath::Max(0.92-num*0.06, miny);
-  INFO("Found " << num << " histograms, miny = " << miny);
+  DEBUG("Found " << num << " histograms, miny = " << miny);
 
   if (t[gPadNr]) {
     delete t[gPadNr];
@@ -1432,13 +1554,8 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
   }
   t[gPadNr] = new TLegend(minx, miny, maxx, 0.92);
   setopt(t[gPadNr]);
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    Int_t process = gOrder[gPadNr][i]; 
-    if (gHisto[gPadNr][process] == 0 || gProcess[process].join)
-      continue;
-    if (gHisto[gPadNr][process]->Integral()/integral < mincontent)
-      continue;
-
+  for (Int_t i = 0; i < (Int_t) entries.size(); i++) {
+    Int_t process = entries[i];
     const char * opt;
     const char * name = gProcess[process].tname;
     if (i == gMaxProcess-1) {

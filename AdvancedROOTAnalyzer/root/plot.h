@@ -65,8 +65,8 @@ const  Int_t          gMaxPad = 9;
 extern Int_t          gPadNr;
 
 // the histograms for each process
-extern TH1D        ** gHisto[gMaxPad];   // size gMaxProcess
-extern TH1D        ** gShadow[gMaxPad];  // size gMaxProcess
+extern TH1D        ** gHisto[gMaxPad];   // size gMaxProcess, stacked histograms
+extern TH1D        ** gShadow[gMaxPad];  // size gMaxProcess, useful when using hatch styles
 extern TH2D        ** gHisto2;         // size gMaxProcess
 
 // process drawing options and more
@@ -123,10 +123,6 @@ extern Double_t     * gLumi; // size gMaxPeriod
 // how many signal MCs exist
 extern Int_t          gMaxSignal;
 
-// which signal mc's to regard as signal and which as background
-// bit field for signal:
-extern Int_t          gSignal;
-
 // subdir to base directory (set by selection())
 extern const char   * gSubDir;
 
@@ -141,7 +137,7 @@ extern Bool_t         gIsColor;
 
 // everyday use
 void selection(const char * subdir);
-void periods(char * startperiod, char * endperiod = 0);
+void period(const char * startperiod, const char * endperiod = 0);
 void plot(const char * hname, const char * selection = "global_weight",
 	  Int_t nbins = 100, Double_t min = 0, Double_t max = 1);
 void cd(Int_t canvas);
@@ -153,6 +149,7 @@ void liny();
 void logy();
 void rebin(Int_t nbins);
 void legend(Double_t mincontent = 0.01, Int_t posi = 1, Double_t miny = -1);
+TArrow * arrow(Double_t position, Int_t neighbourbins = 0);
 void print(const char * hname = 0);
 
 // less often used
@@ -176,6 +173,7 @@ void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin);
 TH1D * join(Int_t nhistos, TH1D * histo[]);
 Int_t FindFirstHisto();
 void compose();
+TH1D ** decompose_all(bool delete_old = kTRUE);
 void decompose();
 TH1D * addperiod(Int_t process, const char * hname,
 		 const char * selection, Int_t nbins, Double_t min,
