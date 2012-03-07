@@ -146,8 +146,19 @@ void Analysis::ReconstructFinalState(map<char, vector<int> > & particles, int ve
     // check daughters
     int pdgid = abs(truth_pdgid[j]);
     // take all leptons
-    if (pdgid == 11 || pdgid == 13 || pdgid == 15) {
+    if (pdgid == 11) {
       DEBUG("lepton j = " << j << ", pdgid = " << pdgid);
+      particles['e'].push_back(j);
+      particles['l'].push_back(j);
+    }
+    else if (pdgid == 13) {
+      DEBUG("lepton j = " << j << ", pdgid = " << pdgid);
+      particles['m'].push_back(j);
+      particles['l'].push_back(j);
+    }
+    else if (pdgid == 15) {
+      DEBUG("lepton j = " << j << ", pdgid = " << pdgid);
+      particles['t'].push_back(j);
       particles['l'].push_back(j);
     }
     else if (pdgid == 12 || pdgid == 14 || pdgid == 16) {
@@ -168,9 +179,11 @@ void Analysis::ReconstructFinalState(map<char, vector<int> > & particles, int ve
       ReconstructFinalState(particles, truth_evtxid[j]);
     }
     // W, Z, Higgs -> decaying in two more particles (leptons/quarks)
-    else if (pdgid == 23 || pdgid == 24 || pdgid == 25) {
+    // + photon
+    else if (pdgid >= 21 && pdgid <= 25) {
       DEBUG("boson j = " << j << ", pdgid = " << pdgid);
       particles['b'].push_back(j);
+      ReconstructFinalState(particles, truth_evtxid[j]);
     }
     else if (pdgid == 0) {
       // ignore - Herwig special code
@@ -197,21 +210,40 @@ bool truth_pt_comparator::operator()(int i, int j)
 void Analysis::SignalStudy()
 {
   // muons, neutrinos and quarks in final state
-  int nLeptons = 0;
+  int nLeptons  = 0;
   int nGauginos = 0;
   int nSleptons = 0;
   int nBosons   = 0;
+  int nHiggs    = 0;
 
   // slepton charge
   int charge = 0;
+  // slepton four-momentum
+  TLorentzVector slepton;
+  TLorentzVector resonance;
 
   for (int i = 0; i < truth_n; i++) {
+    // sum up four-momenta of final state particles
+    if (truth_evtxid[i] == -1 && truth_pdgid[i] != 0 && 
+	(truth_bvtxid[i] != 1 || abs(truth_pdgid[i]) > 6)) {
+      TLorentzVector particle(truth_px[i], truth_py[i], truth_pz[i], truth_E[i]);
+      slepton += particle;
+    }
+
     // find particles produced at first vertex
     if (truth_bvtxid[i] != 1)
       continue;
+
+    // sum up particles at vertex 1, cross-check with final state particles
+    if (truth_pdgid[i] != 0 && abs(truth_pdgid[i]) > 6) {
+      TLorentzVector particle(truth_px[i], truth_py[i], truth_pz[i], truth_E[i]);
+      resonance += particle;
+    }
+    
+    // analyse particles
     switch (abs(truth_pdgid[i])) {
       // muon
-      case 13:
+      case 13: // \mu^-
 	nLeptons++;
 	if (truth_pdgid[i] > 0)
 	  charge--;
@@ -219,7 +251,7 @@ void Analysis::SignalStudy()
 	  charge++;
 	break;
 	// muon neutrino
-      case 14:
+      case 14: // \nu_\mu
 	nLeptons++;
 	break;
 	// ignore quarks and status 0 particles
@@ -229,7 +261,8 @@ void Analysis::SignalStudy()
       case 2:
 	break;
 	// chargino
-      case 1000024:
+      case 1000024: // \tilde{\chi}_1^+
+      case 1000037: // \tilde{\chi}_2^+
 	nGauginos++;
 	if (truth_pdgid[i] > 0)
 	  charge++;
@@ -237,28 +270,37 @@ void Analysis::SignalStudy()
 	  charge--;
 	break;
 	// neutralino
-      case 1000022:
-      case 1000023:
+      case 1000022: // \tilde{\chi}_1^0
+      case 1000023: // \tilde{\chi}_2^0
+      case 1000025: // \tilde{\chi}_3^0
+      case 1000035: // \tilde{\chi}_4^0
 	nGauginos++;
 	break;
-      case 1000013:
+      case 1000013: // \tilde{\mu}_L^-
+      case 2000013: // \tilde{\mu}_R^-
 	nSleptons++;
 	if (truth_pdgid[i] > 0)
 	  charge--;
 	else
 	  charge++;
 	break;
-      case 1000014:
+      case 1000014: // \tilde{\nu}_{\mu\,L}
 	nSleptons++;
 	break;
-      case 24:
+      case 24: // W^+
 	nBosons++;
 	if (truth_pdgid[i] > 0)
 	  charge++;
 	else
 	  charge--;
 	break;
+	// Higgs
+      case 25: // h^0
+	nHiggs++;
+	nBosons++;
+	break;
       default:
+	TruthDump();
 	THROW("Unexpected particle found in Signal sample");
     }
   }
@@ -272,23 +314,8 @@ void Analysis::SignalStudy()
   // follow the decay chain to find out if there are two muons (no neutrinos)
   map<char, vector<int> > particles;
   ReconstructFinalState(particles, 1);
-  TLorentzVector slepton;
-  for (map<char, vector<int> >::const_iterator it = particles.begin();
-       it != particles.end(); ++it) {
-    char ptype = it->first;
-    DEBUG("Type " << ptype << ":");
-    for (vector<int>::const_iterator it2 = it->second.begin();
-	 it2 != it->second.end(); ++it2) {
-      DEBUG("Final state particle: " << *it2 << ", pdgid = " << truth_pdgid[*it2]);
-      // sum up four-momenta of all final state particles
-      if (ptype == 'l' || ptype == 'n' || ptype == 'q') {
-	TLorentzVector particle(truth_px[*it2], truth_py[*it2], truth_pz[*it2], truth_E[*it2]);
-	slepton += particle;
-      }
-    }
-  }
-  // is it signal (i.e. two muons and at least two jets) or not?
-  if (particles['l'].size() == 2 && particles['q'].size() >= 2) {
+  // is it signal (i.e. at least two muons and at least two jets) or not?
+  if (particles['m'].size() >= 2 && particles['q'].size() >= 2) {
     fIsSignal = true;
   }
   else {
@@ -299,19 +326,23 @@ void Analysis::SignalStudy()
   if ((fInputType == "signal" && !fIsSignal) || (fInputType == "background" && fIsSignal))
     return;
 
-  Fill("Sig_nMuon", particles['l'].size());
+  Fill("Sig_nElectron", particles['e'].size());
+  Fill("Sig_nMuon", particles['m'].size());
+  Fill("Sig_nTau", particles['t'].size());
+  Fill("Sig_nLeptons", particles['l'].size());
   Fill("Sig_nNeutrino", particles['n'].size());
-  Fill("Sig_nQuarksSig", particles['q'].size());
-  Fill("Sig_nQuarksBack", particles['b'].size()*2);
-  Fill("Sig_nQuarks", particles['q'].size()+particles['b'].size()*2);
+  Fill("Sig_nQuark", particles['q'].size());
   Fill("Sig_SleptonMass", slepton.M());
   Fill("Sig_SleptonCharge", charge);
+  Fill("Sig_nBoson", nBosons);
+  Fill("Sig_nHiggs", nHiggs);
+  Fill("Sig_Resonance", resonance.M());
 
   // get true muon pt distribution, true quark pt distribution etc.
   double ptMax=-1E9;
   double ptMin=1E9;
-  for (vector<int>::const_iterator it = particles['l'].begin();
-       it != particles['l'].end(); it++) {
+  for (vector<int>::const_iterator it = particles['m'].begin();
+       it != particles['m'].end(); it++) {
     ptMax = TMath::Max(ptMax, truth_pt[*it]);
     ptMin = TMath::Min(ptMin, truth_pt[*it]);
     Fill("Sig_EtaMu", truth_eta[*it]);
@@ -1088,13 +1119,19 @@ void Analysis::CreateHistograms()
   CreateHisto("runnumber", "Run number", lastrun-firstrun+1, firstrun, lastrun+1);
 
   // signal histograms
+  CreateHisto("Sig_nElectron", "Signal MC truth: number of electrons in final state", 10, -0.5, 9.5);
   CreateHisto("Sig_nMuon", "Signal MC truth: number of muons in final state", 10, -0.5, 9.5);
-  CreateHisto("Sig_nNeutrino", "Signal MC truth, number of neutrinos in final state", 10, -0.5, 9.5);
-  CreateHisto("Sig_nQuarksSig", "Signal MC truth, number of quarks (from sparticles) in final state", 10, -0.5, 9.5);
-  CreateHisto("Sig_nQuarksBack", "Signal MC truth, number of quarks from decay chain in final state", 10, -0.5, 9.5);
-  CreateHisto("Sig_nQuarks", "Signal MC truth: number of quarks in final states", 10, -0.5, 9.5);
-  CreateHisto("Sig_SleptonMass", "Resonance mass of slepton@GeV", 1000, 0, 1000);
+  CreateHisto("Sig_nTau", "Signal MC truth: number of #tau in final state", 10, -0.5, 9.5);
+
+  CreateHisto("Sig_nLeptons", "Signal MC truth: number of leptons in final state", 10, -0.5, 9.5);
+  CreateHisto("Sig_nNeutrino", "Signal MC truth, number of #\nu_{#tau} in final state", 10, -0.5, 9.5);
+  
+  CreateHisto("Sig_nQuark", "Signal MC truth: number of quarks in final states", 10, -0.5, 9.5);
+  CreateHisto("Sig_nHiggs", "Signal MC truth: Number of intermediate Higgs bosons", 10, -0.5, 9.5);
+  CreateHisto("Sig_nBoson", "Signal MC truth: Number of intermediate bosons (including Higgs)", 10, -0.5, 9.5);
+  CreateHisto("Sig_SleptonMass", "Resonance mass from final state particles@GeV", 1000, 0, 2000);
   CreateHisto("Sig_SleptonCharge", "Charge of slepton in units of e", 3, -1.5, 1.5);
+  CreateHisto("Sig_Resonance", "Resonance mass from first vertex@GeV", 1000, 0, 2000);
 
   CreateHisto("Sig_ptMu1", "p_{T} of leading muon@GeV", 500, 0, 500);
   CreateHisto("Sig_ptMu2", "p_{T} of second leading muon@GeV", 500, 0, 500);
@@ -1372,9 +1409,12 @@ double Analysis::GetFakeRate(double muopt, double eta, double jetpt)
     fakeRate = fFakeRateHisto2D->GetBinContent(bin);
   }
   if (fakeRate <= 0. || fakeRate >= 1.) {
-    INFO("muo pt= " << muopt << ", eta = " << eta << ", jetpt = " << jetpt);
-    THROW("insane value " + std::string(Form("%f", fakeRate)) 
-	  + " for tight/loose ratio");
+    WARNING("unexpected value " << fakeRate << " for tight/loose ratio");
+    WARNING("muo pt= " << muopt << ", eta = " << eta << ", jetpt = " << jetpt);
+    if (fakeRate < 0)
+      THROW("T/L ratio below zero, cannot proceed");
+    if (fakeRate >= 1)
+      THROW("T/L ratio equals to or larger than 1, cannot proceed");
   }
   return fakeRate;
 }
