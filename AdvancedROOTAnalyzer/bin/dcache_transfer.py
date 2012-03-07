@@ -14,7 +14,12 @@ import ara
 import subprocess
 
 def main():
-    usage = "usage: %prog [options] dcache-dir"
+    usage = """usage: %prog [options] dcache-dir
+
+This program transfers files from the given directory on dcache to 
+the current local directory. It checks the time stamp and sizes of
+all files, and only transfers those files which are newer or not
+completely transferred."""
     optParser = optparse.OptionParser(usage)
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
