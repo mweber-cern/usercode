@@ -109,9 +109,9 @@ def main():
         return 1
 
     try:
-        CMSSW_BASE=os.environ['CMSSW_BASE']
+        ROOTSYS=os.environ['ROOTSYS']
     except KeyError:
-        print("You must setup correct CMSSW version for AdvancedROOTAnalyzer to work")
+        print("You must setup correct ROOTSYS for AdvancedROOTAnalyzer to work")
         return 1
 
     # setup local arguments
@@ -123,6 +123,18 @@ def main():
 
     # read global configuration file
     ara.config.read(options.cfgfile)
+
+    # Check ROOT version
+    rootversion = ara.getCommandOutput2("root-config --version");
+    print rootversion
+    first = rootversion.split("/")[0]
+    fix   = rootversion.split("/")[1]
+    major = int( first.split(".")[0])
+    minor = int( first.split(".")[1])
+    if major < 5 or (major == 5 and minor < 32):
+        print "You are using to old root version", rootversion
+        print "You need to use at least ROOT 5.32.00 for hadd to work correctly"
+        print "All your histograms filled by text strings might be wrong"
 
     print "Checking and joining job(s):", options.job
 
