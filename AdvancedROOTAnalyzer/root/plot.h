@@ -7,6 +7,7 @@
 #include "TCanvas.h"
 #include "TH1D.h"
 #include "TH2D.h"
+#include "TH3D.h"
 #include "TArrow.h"
 #include "TStyle.h"
 #include "TLegend.h"
@@ -38,7 +39,7 @@ default: std::cout << "DEBUG: " << message << std::endl; } } }
 // global configuration options etc.
 
 // global Variable to log errors (1), warnings (2), info (3), debug(4,5,...)
-extern int            gLogLevel;
+extern Int_t          gLogLevel;
 
 extern TEnv         * gConfig;
 
@@ -65,9 +66,11 @@ const  Int_t          gMaxPad = 9;
 extern Int_t          gPadNr;
 
 // the histograms for each process
-extern TH1D        ** gHisto[gMaxPad];   // size gMaxProcess, stacked histograms
+extern TH1D        ** gHisto[gMaxPad];   // size gMaxProcess, unstacked histograms
+extern TH1D        ** gStack[gMaxPad];   // size gMaxProcess, stacked histograms
 extern TH1D        ** gShadow[gMaxPad];  // size gMaxProcess, useful when using hatch styles
-extern TH2D        ** gHisto2;         // size gMaxProcess
+extern TH2D        ** gHisto2;           // size gMaxProcess
+extern TH3D        ** gHisto3[gMaxPad];  // size gMaxProcess
 
 // process drawing options and more
 struct TProcess {
@@ -138,8 +141,14 @@ extern Bool_t         gIsColor;
 // everyday use
 void selection(const char * subdir);
 void period(const char * startperiod, const char * endperiod = 0);
+void stage(Int_t i);
 void plot(const char * hname, const char * selection = "global_weight",
 	  Int_t nbins = 100, Double_t min = 0, Double_t max = 1);
+void plot2(const char * hname,
+	   const TH2D * hsample = 0, const char * selection = "global_weight",
+	   const char * drawopt = "box");
+void plot3(const char * hname,
+	   const TH3D * hsample = 0, const char * selection = "global_weight");
 void cd(Int_t canvas);
 void zoom(Double_t low, Double_t up);
 void unzoom();
@@ -151,6 +160,7 @@ void rebin(Int_t nbins);
 void legend(Double_t mincontent = 0.01, Int_t posi = 1, Double_t miny = -1);
 TArrow * arrow(Double_t position, Int_t neighbourbins = 0);
 void print(const char * hname = 0);
+void pprint(const char * hname = 0);
 
 // less often used
 void MakeCanvas(Int_t dx = 1, Int_t dy = 2);
@@ -158,9 +168,19 @@ void title(const char * title = 0);
 void shiftbin(Int_t nbins);
 void mirror();
 void smooth(TH1D * histo, Double_t xlow, Double_t xup, Int_t nbins);
-void ascii(const char * fname = 0);
 void subfigure(const char * subfig = "a)");
-void showintegral();
+void color(Bool_t on = kTRUE);
+void top();
+void bottom();
+void plotadd(const char * name1, const char * name2);
+void plotadd(const char * name1, const char * name2,
+	     const char * name3, const char * name4);
+
+// for fitting
+TH1D * signalHisto(const char * signal_name = 0);
+TH1D * backgroundHisto(const char * signal_name = 0);
+TH1D * dataHisto();
+
 
 // technical stuff used by other macros, do not use directly
 void setopt(TStyle * style);
@@ -172,9 +192,6 @@ const char * getpath(Int_t period);
 void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin);
 TH1D * join(Int_t nhistos, TH1D * histo[]);
 Int_t FindFirstHisto();
-void compose();
-TH1D ** decompose_all(bool delete_old = kTRUE);
-void decompose();
 TH1D * addperiod(Int_t process, const char * hname,
 		 const char * selection, Int_t nbins, Double_t min,
 		 Double_t max);

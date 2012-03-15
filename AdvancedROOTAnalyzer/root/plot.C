@@ -15,7 +15,7 @@ using namespace std;
 
 //////////////////////////////////////////////////////////////////////
 // initialize variables from plot.h
-int             gLogLevel = 3;
+Int_t           gLogLevel = 3;
 TEnv          * gConfig = 0;
 Int_t           gMaxProcess = 0;
 TCanvas       * gCanvas = 0;
@@ -25,8 +25,10 @@ Int_t           gMaxPeriod = 0;
 Int_t           gStage = 0;
 Int_t           gPadNr = 0;
 TH1D         ** gHisto[gMaxPad] = { 0 };   // size gMaxProcess
+TH1D         ** gStack[gMaxPad] = { 0 };   // size gMaxProcess
 TH1D         ** gShadow[gMaxPad] = { 0 };  // size gMaxProcess
 TH2D         ** gHisto2 = 0;           // size gMaxProcess
+TH3D         ** gHisto3[gMaxPad] = { 0 };   // size gMaxProcess
 TProcess      * gProcess; // size gMaxProcess
 TArrow        * ArrowMin[gMaxPad] = { 0 };
 TArrow        * ArrowMax[gMaxPad] = { 0 };
@@ -61,11 +63,11 @@ char * strdup_new(const char * text)
 
 void setopt(TStyle * style)
 {
+  style->SetOptTitle(0);          // don't show histogram title
   style->SetPadLeftMargin(0.15);
   return;
   // style options
   style->SetStatColor(10);        // white background for statistics box
-  style->SetOptTitle(0);          // don't show histogram title
 //   style->SetTitleColor(10);    // title background white
   style->SetFillColor(10);        // fill everything with a white background
   style->SetFillStyle(1001);      // solid fill style
@@ -193,10 +195,14 @@ void delete_old_config()
     delete[] gLumi;
     gLumi = 0;
   }
-  for (int pad = 0; pad < gMaxPad; pad++) {
+  for (Int_t pad = 0; pad < gMaxPad; pad++) {
     if (gHisto[pad]) {
       delete[] gHisto[pad];
       gHisto[pad] = 0;
+    }
+    if (gStack[pad]) {
+      delete[] gStack[pad];
+      gStack[pad] = 0;
     }
     if (gShadow[pad]) {
       delete[] gShadow[pad];
@@ -205,6 +211,10 @@ void delete_old_config()
     if (gOrder[pad]) {
       delete[] gOrder[pad];
       gOrder[pad] = 0;
+    }
+    if (gHisto3[pad]) {
+      delete[] gHisto3[pad];
+      gHisto3[pad] = 0;
     }
   }
   if (gHisto2) {
@@ -271,19 +281,23 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   gMaxProcess = N_bg + gMaxSignal + 1;
 
   // create and initialize arrays depending on gMaxProcess
-  for (int pad = 0; pad < gMaxPad; pad++) {
+  for (Int_t pad = 0; pad < gMaxPad; pad++) {
     gHisto[pad]  = new TH1D * [gMaxProcess];
+    gStack[pad]  = new TH1D * [gMaxProcess];
     gShadow[pad] = new TH1D * [gMaxProcess];
     gOrder[pad]  = new Int_t[gMaxProcess];
-    for (int i = 0; i < gMaxProcess; i++) {
+    gHisto3[pad] = new TH3D * [gMaxProcess];
+    for (Int_t i = 0; i < gMaxProcess; i++) {
       gHisto[pad][i]  = 0;
+      gStack[pad][i]  = 0;
       gShadow[pad][i] = 0;
       gOrder[pad][i] = i;
+      gHisto3[pad][i] = 0;
     }
   }
   gHisto2      = new TH2D * [gMaxProcess];
   gProcess     = new TProcess[gMaxProcess];
-  for (int i = 0; i < gMaxProcess; i++) {
+  for (Int_t i = 0; i < gMaxProcess; i++) {
     gHisto2[i] = 0;
   }
 
@@ -311,7 +325,13 @@ void read_config_file(const char * configFileName = "Overview.cfg")
     gProcess[i].mcolor = gConfig->GetValue(Form("%s.mcolor", selector),  1);
     gProcess[i].msize  = gConfig->GetValue(Form("%s.msize", selector),  0.7);
     gProcess[i].join   = gConfig->GetValue(Form("%s.join", selector), kFALSE);
-    gProcess[i].stack  = gConfig->GetValue(Form("%s.stack", selector), kTRUE);    
+    gProcess[i].stack  = gConfig->GetValue(Form("%s.stack", selector), kTRUE);
+    if (i == 0 || i == gMaxSignal) {
+      if (gProcess[i].join) {
+	ERROR("Misconfiguration for process " << selector << ":");
+	ERROR("You are not allowed to join the first signal or background histogram");
+      }
+    }
   }
   // data
   gProcess[gMaxProcess-1].fname = strdup_new(gConfig->GetValue("file", "data"));
@@ -493,6 +513,15 @@ void MakeCanvas2(Int_t dy, Double_t percent = 0.8)
   cd(gPadNr+1);
 }
 
+void padupdate()
+{
+  if (gPad == 0) 
+    return;
+  gPad->Modified();
+  gPad->Update();
+  gPad->RedrawAxis();
+}
+
 Int_t FindFirstHisto()
 {
   // find a histogram that has been filled and return its index in gHisto[gPadNr]
@@ -503,11 +532,11 @@ Int_t FindFirstHisto()
       return process;
     }
   }
-  ERROR("No MC found");
+  WARNING("No histograms found - use plot()");
   return -1;
 }
 
-void color(Bool_t on = kTRUE)
+void color(Bool_t on)
 {
   // set color on or off
   gIsColor = on;
@@ -562,15 +591,6 @@ void selection(const char * subdir)
     delete gSubDir;
   gSubDir = strdup_new(subdir);
 
-  if (strstr(gSubDir, "final")) {
-    // plot signal up for final selection
-    top();
-  }
-  else {
-    // plot signal down for preselection
-    bottom();
-  }
-
   // read in option file
   readcuts();
 }
@@ -605,6 +625,15 @@ void period(const char * startperiod, const char * endperiod)
 
   // read in option file
   readcuts();
+}
+
+void stage(Int_t i)
+{
+  // set stage
+  if (i < 0) {
+    WARNING("given stage < 0");
+  }
+  gStage = i;
 }
 
 const char * GetUnit(const char * hname)
@@ -643,7 +672,7 @@ const char * GetXTitle(const TH1D * histo)
   // create new string containing only x title of histogram name
   static char * title = 0;
 
-  DEBUG("GetXTitle() start\n");
+  DEBUG("GetXTitle() start");
 
   if (title) {
     delete[] title;
@@ -696,7 +725,7 @@ const char * GetXTitle(const TH1D * histo)
 
 const char * GetYTitle(const TH1D * histo)
 {
-  const int max_size = 4096;
+  const Int_t max_size = 4096;
   // create new string containing only y title of histogram name
   static char * title = 0;  // the y-title
   DEBUG("GetYTitle() start");
@@ -790,22 +819,22 @@ TArrow * arrow(Double_t position, Int_t neighbourbins)
   Int_t hstart = FindFirstHisto();
   if (hstart < 0)
     return 0;
-  Double_t fmax = gHisto[gPadNr][hstart]->GetMaximum();
-  Double_t fmin = gHisto[gPadNr][hstart]->GetMinimum();
+  Double_t fmax = gStack[gPadNr][hstart]->GetMaximum();
+  Double_t fmin = gStack[gPadNr][hstart]->GetMinimum();
   DEBUG("fmax = " << fmax);
   DEBUG("fmin = " << fmin);
-  TAxis * axis = gHisto[gPadNr][hstart]->GetXaxis();
+  TAxis * axis = gStack[gPadNr][hstart]->GetXaxis();
   if (axis == 0) {
     ERROR("No axis found");
     return 0;
   }
   Int_t fbin = axis->FindFixBin(position);
-  DEBUG("fbin = " << fbin << ", max = " << gHisto[gPadNr][hstart]->GetNbinsX());
+  DEBUG("fbin = " << fbin << ", max = " << gStack[gPadNr][hstart]->GetNbinsX());
   Double_t fbottom = 1E-8;
   for (Int_t process = 0; process < gMaxProcess; process++) {
-    if (gHisto[gPadNr][process]) {
+    if (gStack[gPadNr][process]) {
       for (Int_t i = fbin - neighbourbins; i <= fbin + neighbourbins; i++) {
-        Double_t temp = gHisto[gPadNr][process]->GetBinContent(i);
+        Double_t temp = gStack[gPadNr][process]->GetBinContent(i);
         if (temp > fbottom)
           fbottom = temp;
       }
@@ -851,7 +880,7 @@ void drawcut()
   Int_t hstart = FindFirstHisto();
   if (hstart < 0)
     return;
-  const char * t = gHisto[gPadNr][hstart]->GetName();
+  const char * t = gStack[gPadNr][hstart]->GetName();
   DEBUG("histo name: " << t);
   // only draw arrows for N-1 plots
   if (t[1] != 'n')
@@ -864,7 +893,7 @@ void drawcut()
     ArrowMin[gPadNr] = arrow(xmin);
   if (xmax != gOptDefault)
     ArrowMax[gPadNr] = arrow(xmax);
-  DEBUG("end drawcut\n");
+  DEBUG("end drawcut");
 }
 
 void draw(Bool_t autotitle = kTRUE)
@@ -879,23 +908,26 @@ void draw(Bool_t autotitle = kTRUE)
     gPad->cd();
     gPad->Clear();
   }
+  else {
+    MakeCanvas();
+  }
 
   // now draw all stacked histograms in canvas
   TH1D * histo = 0;
   for (Int_t i = 0; i < gMaxProcess-1; i++) {
     Int_t process = gOrder[gPadNr][i];
-    LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
-    histo = gHisto[gPadNr][process];
+    DEBUG("process " << process << " [" << gProcess[process].fname << "]");
+    histo = gStack[gPadNr][process];
     if (histo == 0)
       continue;
 
-    DEBUG("draw 1");
     histo->SetLineStyle(gProcess[process].lstyle);
     histo->SetLineColor(gProcess[process].lcolor);
 
+    // only draw stacked histograms in first loop
     if (!gProcess[process].stack)
       continue;
-
+    DEBUG("stacked histogram");
     if (gIsColor) {
       histo->SetFillStyle(1001);
       histo->SetFillColor(gProcess[process].fcolor);
@@ -933,16 +965,19 @@ void draw(Bool_t autotitle = kTRUE)
     }
     else {
       // draw others, but only if not joined
-      if (!gProcess[process].join)
+      if (!gProcess[process].join) {
+	DEBUG("draw");
 	histo->Draw("histosame");
+      }
     }
   }
 
-  // draw unstacked histograms as lines + data
+  // draw unstacked histograms as lines, also draw data
   for (Int_t i = 0; i < gMaxProcess; i++) {
     Int_t process = gOrder[gPadNr][i];
     LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
-    histo = gHisto[gPadNr][process];
+    // does the histogram exist?
+    histo = gStack[gPadNr][process];
     if (histo == 0)
       continue;
     // ignore stacked histograms
@@ -951,6 +986,7 @@ void draw(Bool_t autotitle = kTRUE)
 
     if (process == gMaxProcess - 1) {
       // data
+      DEBUG("data");
       histo->SetMarkerStyle(gProcess[process].marker);
       histo->SetMarkerColor(gProcess[process].mcolor);
       histo->SetMarkerSize(gProcess[process].msize);
@@ -959,18 +995,14 @@ void draw(Bool_t autotitle = kTRUE)
       histo->SetLineWidth(2);
     }
 
-    // check if histogram exists
-    histo = gHisto[gPadNr][process];
-    if (histo == 0)
-      continue;
-
+    DEBUG("unstacked histogram");
     if (first) {
       if (gProcess[process].join) {
 	ERROR("first process to be drawn (" << gProcess[process].fname 
 	      << ") has option 'join'");
       }
-      DEBUG("draw unstacked first");
       // draw first
+      DEBUG("draw unstacked first");
       if (autotitle) {
 	histo->SetXTitle(GetXTitle(histo));
 	histo->SetYTitle(GetYTitle(histo));
@@ -988,41 +1020,51 @@ void draw(Bool_t autotitle = kTRUE)
     else {
       if (process == gMaxProcess-1) {
 	// draw data
+	DEBUG("draw data");
 	histo->Draw("e1psame");
       } 
       else {
 	// draw others, but only if not joined
-	if (!gProcess[process].join)
+	if (!gProcess[process].join) {
+	  DEBUG("draw");
 	  histo->Draw("histosame");
+	}
       }
     }
   }  
 
   // draw cut (if it is there)
   drawcut();
-  gPad->Update();
-  gPad->RedrawAxis();
-  DEBUG("end draw");
+  padupdate();
+  DEBUG("leave draw()");
 }
 
 void max(Double_t maximum)
 {
   // set maximum for all histograms
+  FindFirstHisto();
   for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][i] != 0)
-      gHisto[gPadNr][i]->SetMaximum(maximum);
+    if (gStack[gPadNr][i] != 0)
+      gStack[gPadNr][i]->SetMaximum(maximum);
   }
-  draw();
+  padupdate();
 }
 
 void min(Double_t minimum)
 {
+  DEBUG("enter min()");
   // set minimum for all histograms
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gHisto[gPadNr][i] != 0)
-      gHisto[gPadNr][i]->SetMinimum(minimum);
+  if (gPad && gPad->GetLogy() && minimum <= 0) {
+    ERROR("Can not set minimum " << minimum << " with logarithmic y-axis");
+    return;
   }
-  draw();
+  FindFirstHisto();
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    if (gStack[gPadNr][i] != 0)
+      gStack[gPadNr][i]->SetMinimum(minimum);
+  }
+  padupdate();
+  DEBUG("leave min()");
 }
 
 void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin)
@@ -1042,11 +1084,11 @@ void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin)
   // full range?
   if (xlow == xup) {
     startbin = 1;
-    endbin   = gHisto[gPadNr][hstart]->GetNbinsX();
+    endbin   = gStack[gPadNr][hstart]->GetNbinsX();
   }
   else {
-    startbin = gHisto[gPadNr][hstart]->GetXaxis()->FindFixBin(xlow);
-    endbin   = gHisto[gPadNr][hstart]->GetXaxis()->FindFixBin(xup);
+    startbin = gStack[gPadNr][hstart]->GetXaxis()->FindFixBin(xlow);
+    endbin   = gStack[gPadNr][hstart]->GetXaxis()->FindFixBin(xup);
   }
 }
 
@@ -1061,9 +1103,9 @@ void findmax(Double_t low = 0, Double_t up = 0)
 
   Double_t lmax = -1E99;
   for (Int_t process = 0; process < gMaxProcess; process++) {
-    if (gHisto[gPadNr][process]) {
+    if (gStack[gPadNr][process]) {
       for (Int_t i = start; i <= end; i++) {
-	Double_t temp = gHisto[gPadNr][process]->GetBinContent(i);
+	Double_t temp = gStack[gPadNr][process]->GetBinContent(i);
 	if (temp > lmax)
 	  lmax = temp;
       }
@@ -1071,6 +1113,7 @@ void findmax(Double_t low = 0, Double_t up = 0)
   }
   if (lmax > 0)
     max(lmax*(1+1/TMath::Sqrt(lmax))*1.1);
+  DEBUG("leave findmax()");
 }
 
 void findmin(Double_t low = 0, Double_t up = 0)
@@ -1091,9 +1134,9 @@ void findmin(Double_t low = 0, Double_t up = 0)
 
   Double_t lmin = 1E99;
   for (Int_t process = 0; process < gMaxProcess-1; process++) {
-    if (gHisto[gPadNr][process]) {
+    if (gStack[gPadNr][process]) {
       for (Int_t i = start; i <= end; i++) {
-	Double_t temp = gHisto[gPadNr][process]->GetBinContent(i);
+	Double_t temp = gStack[gPadNr][process]->GetBinContent(i);
 	if (temp > 0 && temp < lmin)
 	  lmin = temp;
       }
@@ -1108,30 +1151,31 @@ void findmin(Double_t low = 0, Double_t up = 0)
   }
 
   min(lmin);
+  DEBUG("leaved findmin()");
 }
 
 void zoom(Double_t low, Double_t up)
 {
   // zoom on x-axis
   for (Int_t process = 0; process < gMaxProcess-1; process++) {
-    if (gHisto[gPadNr][process]) {
-      gHisto[gPadNr][process]->SetAxisRange(low, up);
+    if (gStack[gPadNr][process]) {
+      gStack[gPadNr][process]->SetAxisRange(low, up);
     }
   }
-  draw();
+  padupdate();
 }
 
 void unzoom()
 {
   // unzoom x-axis
   for (Int_t process = 0; process < gMaxProcess-1; process++) {
-    if (gHisto[gPadNr][process]) {
-      TAxis * axis = gHisto[gPadNr][process]->GetXaxis();
+    if (gStack[gPadNr][process]) {
+      TAxis * axis = gStack[gPadNr][process]->GetXaxis();
       if (axis)
 	axis->UnZoom();
     }
   }
-  draw();
+  padupdate();
 }
 
 void rebin(Int_t nbins)
@@ -1140,10 +1184,12 @@ void rebin(Int_t nbins)
   if (FindFirstHisto() < 0)
     return;
 
-  // rebin all histograms
+  // rebin all histograms - stacked and unstacked
   for (Int_t i = 0; i < gMaxProcess; i++) {
     if (gHisto[gPadNr][i])
       gHisto[gPadNr][i]->Rebin(nbins);
+    if (gStack[gPadNr][i])
+      gStack[gPadNr][i]->Rebin(nbins);
   }
 
   // adjust maximum after a rebin and draw
@@ -1157,7 +1203,15 @@ void shiftbin(Int_t nbins)
   // shift whole MC distribution by nbins bins
   if (nbins > 0) {
     for (Int_t process = 0; process < gMaxProcess-1; process++) {
+      // unstacked histograms
       TH1D * histo = gHisto[gPadNr][process];
+      if (histo == 0)
+	continue;
+      for (Int_t bin = histo->GetNbinsX(); bin >= 0; bin--) {
+	histo->SetBinContent(bin, histo->GetBinContent(bin-nbins));
+      }
+      // stacked histograms
+      histo = gStack[gPadNr][process];
       if (histo == 0)
 	continue;
       for (Int_t bin = histo->GetNbinsX(); bin >= 0; bin--) {
@@ -1167,7 +1221,16 @@ void shiftbin(Int_t nbins)
   }
   else {
     for (Int_t process = 0; process < gMaxProcess-1; process++) {
+      // unstacked histograms
       TH1D * histo = gHisto[gPadNr][process];
+      if (histo == 0)
+	continue;
+      for (Int_t bin = 0; bin <= histo->GetNbinsX(); bin++) {
+	if (histo)
+	  histo->SetBinContent(bin, histo->GetBinContent(bin-nbins));
+      }
+      // stacked histograms
+      histo = gStack[gPadNr][process];
       if (histo == 0)
 	continue;
       for (Int_t bin = 0; bin <= histo->GetNbinsX(); bin++) {
@@ -1183,7 +1246,10 @@ void mirror()
 {
   // mirror all histograms
   for (Int_t process = 0; process < gMaxProcess; process++) {
+    // unstacked histograms
     TH1D * histo = gHisto[gPadNr][process];
+    if (histo == 0)
+      continue;
     TH1D * hnew  = (TH1D *) histo->Clone();
     hnew->Reset();
     Int_t nbinmax = histo->GetNbinsX()+1;
@@ -1192,6 +1258,18 @@ void mirror()
     }
     delete histo;
     gHisto[gPadNr][process] = hnew;
+    // stacked histograms
+    histo = gStack[gPadNr][process];
+    if (histo == 0)
+      continue;
+    hnew  = (TH1D *) histo->Clone();
+    hnew->Reset();
+    nbinmax = histo->GetNbinsX()+1;
+    for (Int_t nbin = 0; nbin <= nbinmax; nbin++) {
+      hnew->SetBinContent(nbin, histo->GetBinContent(nbinmax-nbin));
+    }
+    delete histo;
+    gStack[gPadNr][process] = hnew;
   }
   draw();
 }
@@ -1205,7 +1283,7 @@ void print(const char * hname)
 
   char fpath[256];
   if (hname == 0) {
-    TH1D * h1 = gHisto[gPadNr][0];
+    TH1D * h1 = gStack[gPadNr][0];
     if (h1)
       if (gStart != gEnd)
 	snprintf(fpath, 256, "%s-%s-%s.pdf",
@@ -1221,7 +1299,7 @@ void print(const char * hname)
   gCanvas->Print(fpath);
 }
 
-void pprint(const char * hname = 0)
+void pprint(const char * hname)
 {
   // print current pad in a file "name", substitute current
   // histogram name if no name given
@@ -1230,7 +1308,7 @@ void pprint(const char * hname = 0)
 
   char fpath[256];
   if (hname == 0) {
-    TH1D * h1 = gHisto[gPadNr][0];
+    TH1D * h1 = gStack[gPadNr][0];
     if (h1)
       if (gStart != gEnd)
 	snprintf(fpath, 256, "%s-%s-%s.pdf",
@@ -1246,97 +1324,48 @@ void pprint(const char * hname = 0)
   gPad->Print(fpath);
 }
 
+/**
+ * Set the axis titles for this plot.
+ *
+ * If no name is given, then the default title is taken
+ */
 void title(const char * title)
 {
-  // set the axis titles for this plot.
-  // If no name given, then the default title is taken
   Int_t first = FindFirstHisto();
   if (first < 0)
     return;
 
-  gHisto[gPadNr][first]->SetTitle(title);
+  gStack[gPadNr][first]->SetTitle(title);
 
   // now use automatic title
   draw(kTRUE);
 }
 
+/**
+ * Set y-axis to have a logarithmic scale
+ */
 void logy()
 {
-  // set y axis to be logarithmic
+  DEBUG("enter logy()");
+  if (gCanvas == 0)
+    MakeCanvas();
+  min(0.001);
   gPad->SetLogy(1);
-  // adjust minimum
-  findmin();
   draw();
+  DEBUG("leave logy()");
 }
 
+/**
+ * Set y-axis to have a linear scale
+ */
 void liny()
 {
   // set y axis to be linear
   if (gCanvas == 0)
     MakeCanvas();
   gPad->SetLogy(0);
-  // adjust minimum
-  findmin();
-  draw();
-}
-
-void ascii(const char * fname)
-{
-  // print #data, #signal, #back in ascii format to screen and into file
-  if (FindFirstHisto() < 0)
-    return;
-
-  FILE * outfile = 0;
-  if (fname) {
-    // assemble path name
-    char fpath[256];
-    snprintf(fpath, 256, "%s/%s/%s.ascii", gBase, gSubDir, fname);
-    // convert to lower case
-    for (UInt_t i = 0; i < strlen(fpath); i++)
-      fpath[i] = tolower(fpath[i]);
-
-    // open file
-    outfile = fopen(fpath, "w");
-    if (!outfile) {
-      ERROR("Could not open file" << fpath);
-      return;
-    }
-    INFO("Output in file " << fpath);
-  }
-
-  // loop over histogram bins and save each bin in one separate line
-  Double_t nData, nSignal, nBack, nZZBack, temp;
-  for (Int_t i = 1; i <= gHisto[gPadNr][0]->GetNbinsX(); i++) {
-    nData = gHisto[gPadNr][gMaxProcess-1]->GetBinContent(i);
-    // divide other histograms into signal, ZZ background and other background
-    nSignal = 0;
-    nBack   = 0;
-    nZZBack = 0;
-    // loop over MC's
-    for (Int_t j = 0; j < gMaxProcess-1; j++) {
-      // get number of events for this histogram
-      temp = gHisto[gPadNr][gOrder[gPadNr][j]]->GetBinContent(i);
-      // subtract following mc
-      if (j < gMaxProcess-2)
-	temp -= gHisto[gPadNr][gOrder[gPadNr][j+1]]->GetBinContent(i);
-      if (gOrder[gPadNr][j] < 3)
-	// signal
-	nSignal += temp;
-      else if (strstr(gProcess[gOrder[gPadNr][j]].fname, "background")) {
-	// ZZ background
-	nZZBack += temp;
-      }
-      else {
-	// other background
-	nBack   += temp;
-      }
-    }
-    printf("%10.7f   %10.7f   %10.7f   %10.7f\n", nData, nSignal, nBack, nZZBack);
-    if (fname)
-      fprintf(outfile, "%f   %f   %f   %f\n", nData, nSignal, nBack, nZZBack);
-  }
-  if (outfile)
-    fclose(outfile);
+  min(0.);
+  padupdate();
 }
 
 void drawperiod(Int_t posi = -1)
@@ -1383,113 +1412,41 @@ void compose()
   // sum up the histograms in the current order, such that they can be
   // drawn on the screen, one before the other
 
-  // loop over processes
-  for (Int_t i = 0; i < gMaxProcess-1; i++) {
+  // loop over processes in reverse order and sum up
+  for (Int_t i = gMaxProcess-2; i >= 0; i--) {
     Int_t process = gOrder[gPadNr][i];
-    if (gHisto[gPadNr][process] == 0)
+    DEBUG("process " << gProcess[process].fname);
+    TH1D * histo = gHisto[gPadNr][process];
+    // not existing
+    if (histo == 0)
       continue;
-    if (!gProcess[process].stack)
+    // copy histogram to stack
+    DEBUG("copy histogram to stack");
+    gStack[gPadNr][process] = new TH1D(*histo);
+    // not to be stacked - copy only
+    if (!gProcess[process].stack) {
       continue;
-    // add to all previous ones
-    for (Int_t j = 0; j < i; j++) {
+    }
+    // add sum of previous ones
+    for (Int_t j = i+1; j < gMaxProcess-1; j++) {
       Int_t backmc = gOrder[gPadNr][j];
+      // not stacked - ignore
       if (!gProcess[backmc].stack)
 	continue;
-      if (gHisto[gPadNr][backmc] != 0)
-	gHisto[gPadNr][backmc]->Add(gHisto[gPadNr][process]);
-    }
-  }
-  DEBUG("leave compose");
-}
-
-/*
- * Delete decomposed histograms
- */
-void delete_decomposed(TH1D ** dHisto, Int_t n)
-{
-  if (n <= 0) {
-    ERROR("delete_decomposed(): Can not delete " << n << " histograms");
-    return;
-  }
-  for (int i = 0; i < n; i++) {
-    if (dHisto[i]) {
-      delete dHisto[i];
-    }
-  }
-  delete[] dHisto;
-}
-
-/**
- * Get single histograms, not summed up, for all processes.
- */
-TH1D ** decompose_all(bool delete_old)
-{
-  // use static variables in order to be able to delete later
-  static int n = 0;
-  static TH1D ** dHisto;
-  if (delete_old && n > 0) {
-    delete_decomposed(dHisto, n);
-  }
-  // create new histograms
-  n = gMaxProcess;
-  dHisto = new TH1D * [gMaxProcess];
-  // loop over processes
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    Int_t process = gOrder[gPadNr][i];
-    // histo not existing
-    if (gHisto[gPadNr][process] == 0)
-      continue;
-    // histo not stacked - already done!
-    if (gProcess[process].stack) {
-      // copy histogram
-      dHisto[process] = new TH1D(*gHisto[gPadNr][process]);
-      continue;
-    }
-    // stacked histogram - need to subtract joined histograms
-    for (Int_t j = i+1; j < gMaxProcess; j++) {
-      Int_t proc = gOrder[gPadNr][j];
-      // not joined - break loop
-      if (!gProcess[proc].join)
-	break;
-      // not existing - no need to subtract
-      if (gHisto[gPadNr][proc] == 0)
-	continue;
-      // now we have to subtract
-      dHisto[process]->Add(gHisto[gPadNr][proc], -1);
-      break;
-    }
-  }
-  return 0;
-}
-
-void decompose()
-{
-  // subtract summed histograms that are ready for drawing into histograms
-  // corresponding to each process...
-  if (FindFirstHisto() < 0)
-    return;
-  // loop over processes
-  for (Int_t i = 0; i < gMaxProcess-1; i++) {
-    Int_t process = gOrder[gPadNr][i];
-    if (gHisto[gPadNr][process] == 0)
-      continue;
-    if (!gProcess[process].stack)
-      continue;
-    for (Int_t j = i+1; j < gMaxProcess-1; j++) {
-      Int_t proc = gOrder[gPadNr][j];
-      // not joined - break loop
-      if (!gProcess[proc].join)
-	break;
-      // internal consistency
-      if (gProcess[proc].stack)
-	ERROR("decompose(): should not happen");
       // not existing
-      if (gHisto[gPadNr][proc] == 0)
+      if (gHisto[gPadNr][backmc] == 0)
 	continue;
-      gHisto[gPadNr][process]->Add(gHisto[gPadNr][proc], -1);
+      // Add
+      DEBUG("Adding histogram " << gProcess[backmc].fname);
+      gStack[gPadNr][process]->Add(gStack[gPadNr][backmc]);
+      // break loop, since all previous were added
       break;
     }
   }
+  TH1D * hdata = gHisto[gPadNr][gMaxProcess-1];
+  if (hdata)
+    gStack[gPadNr][gMaxProcess-1] = new TH1D(*hdata);
+  DEBUG("leave compose");
 }
 
 void legend(Double_t mincontent, Int_t posi, Double_t miny)
@@ -1506,29 +1463,44 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
   }
 
   // get sum of all processes
-  Double_t integral = gHisto[gPadNr][position]->Integral();
-
-  decompose();
+  Double_t integral = gStack[gPadNr][position]->Integral();
+  DEBUG("integral = " << integral);
 
   // find processes that contribute with given fraction to the integral
-  double sum = 0;
   vector<Int_t> entries;
-  for (Int_t i = gMaxProcess-1; i >=0; i--) {
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
     Int_t process = gOrder[gPadNr][i];
+    // not existing
     if (gHisto[gPadNr][process] == 0)
       continue;
-    sum += gHisto[gPadNr][process]->Integral();
-    if (gProcess[process].join) {
+    // if joined, it was already considered in previous iteration
+    if (gProcess[process].join)
       continue;
+    // OK, get integral
+    Double_t sum = gHisto[gPadNr][process]->Integral();
+    DEBUG(gProcess[process].fname << ": " << sum);
+    // check if histograms are joined -> we need to add statistics
+    for (Int_t j = i+1; j < gMaxProcess-1; j++) {
+      Int_t proc = gOrder[gPadNr][j];
+      // only add joined histograms
+      if (!gProcess[proc].join)
+	break;
+      // not existing
+      if (gHisto[gPadNr][proc] == 0)
+	continue;
+      DEBUG(gProcess[proc].fname << ": + " << gHisto[gPadNr][proc]->Integral());
+      sum += gHisto[gPadNr][proc]->Integral();
     }
+    DEBUG(gProcess[process].fname << ": " << sum);
     if (sum/integral < mincontent) {
-      sum = 0;
       continue;
     }
-    // insert at beginning, since we are counting backwards
-    entries.insert(entries.begin(), process);
+    entries.push_back(process);
     sum = 0;
   }
+  // add data
+  if (gHisto[gPadNr][gMaxProcess-1])
+    entries.push_back(gMaxProcess-1);
 
   // determine minimum
   UInt_t num = entries.size();
@@ -1539,7 +1511,7 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
     delete t[gPadNr];
     t[gPadNr] = 0;
   }
-  double minx, maxx;
+  Double_t minx, maxx;
   if (posi > 0) {
     minx = 0.720; 
     maxx = 0.92;
@@ -1558,7 +1530,7 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
     Int_t process = entries[i];
     const char * opt;
     const char * name = gProcess[process].tname;
-    if (i == gMaxProcess-1) {
+    if (process == gMaxProcess-1) {
       if (gGerman)
 	name = "Daten";
       opt= "p";
@@ -1569,15 +1541,12 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
     else {
       opt = "l";
     }
-    t[gPadNr]->AddEntry(gHisto[gPadNr][process], name, opt);
+    t[gPadNr]->AddEntry(gStack[gPadNr][process], name, opt);
   }
   t[gPadNr]->Draw();
 
   // insert energy information
   drawperiod(posi != 0 ? -posi : -1);
-
-  compose();
-
   DEBUG("exit legend()");
 }
 
@@ -1592,15 +1561,87 @@ void subfigure(const char * subfig)
 
 void DeleteOld()
 {
-  // delete existing histograms gHisto[gPadNr][]
+  // delete existing histograms gStack[gPadNr][] and gHisto[gPadNr][]
   for (Int_t i = 0; i < gMaxProcess; i++) {
+    // unstacked
     if (gHisto[gPadNr][i] != 0) {
       delete gHisto[gPadNr][i];
       // mark as deleted
       gHisto[gPadNr][i] = 0;
     }
+    // stacked
+    if (gStack[gPadNr][i] != 0) {
+      delete gStack[gPadNr][i];
+      // mark as deleted
+      gStack[gPadNr][i] = 0;
+    }
   }
 }
+
+// TH1 * get_period(Int_t process, const char * hname)
+// {
+//   // loops over currently selected periods and adds the histogram
+//   // "hname" from the corresponding mc, returning the summary histogram
+//   char fpath[400];
+
+//   TH1 * htemp = 0;
+//   TH1 * hadd  = 0;
+
+//   for (Int_t period = gStart; period <= gEnd; period++) {
+//     // open file
+//     snprintf(fpath, 400, "%s/%s.root", getpath(period), gProcess[process].fname);
+//     DEBUG("Opening file " << fpath);
+//     TFile * f = TFile::Open(fpath);
+//     if (f == 0 || !f->IsOpen()) {
+//       ERROR("Could not open file " << fpath);
+//       if (hadd)
+// 	delete hadd;
+//       return 0;
+//     }
+//     // get key list from file
+//     TList * keylist = f->GetListOfKeys();
+//     TIter next(keylist);
+//     while (TKey * key = (TKey *) next()) {
+//       // look for histogram name
+//       TString s(key->GetName());
+//       if (s != hname)
+// 	continue;
+//       DEBUG(key->GetClassName() << ": " << key->GetName());
+//       if (strcmp(key->GetClassName(), "TH1D") && 
+// 	  strcmp(key->GetClassName(), "TH2D") && 
+// 	  strcmp(key->GetClassName(), "TH3D")) {
+// 	ERROR("Can not work with class " << key->GetClassName());
+// 	if (hadd)
+// 	  delete hadd;
+// 	delete f;
+// 	return 0;
+//       }
+//       htemp = (TH1 *) key->ReadObj();
+//       // no need to look further in key list
+//       break;
+//     }
+
+//     // scale mc according to luminosity
+//     if (process != gMaxProcess-1) { // do not scale data
+//       Double_t mcLumi = gProcessInfo[period][process].Nev/gProcessInfo[period][process].xs;
+//       Double_t weight = gLumi[period]/mcLumi * gProcessInfo[period][process].weight;
+//       DEBUG("mcLumi = " << mcLumi << ", weight = " << weight);
+//       htemp->Scale(weight);
+//     }
+
+//     // add to summary histogram
+//     if (hadd == 0) {
+//       hadd = new TH1(*htemp);
+//       hadd->SetDirectory(0);
+//     }
+//     else {
+//       hadd->Add(htemp);
+//     }
+//     // close file
+//     delete f;
+//   }
+//   return hadd;
+// }
 
 TH1D * addperiod(Int_t process, const char * hname,
 		 const char * selection, Int_t nbins, Double_t min,
@@ -1618,7 +1659,7 @@ TH1D * addperiod(Int_t process, const char * hname,
   for (Int_t period = gStart; period <= gEnd; period++) {
     // open file
     snprintf(fpath, 400, "%s/%s.root", getpath(period), gProcess[process].fname);
-    LOG(5, "Opening file " << fpath);
+    DEBUG("Opening file " << fpath);
     TFile * f = TFile::Open(fpath);
     if (f == 0 || !f->IsOpen()) {
       if (hadd)
@@ -1629,6 +1670,7 @@ TH1D * addperiod(Int_t process, const char * hname,
     // get key from file
     char histname[strlen(hname)+4];
     sprintf(histname, "h1_%s", hname);
+    // sprintf(histname, "h1_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -1640,7 +1682,7 @@ TH1D * addperiod(Int_t process, const char * hname,
       TTree * dtree = (TTree *) f->Get(treename);
       if (dtree == 0) {
 	// no tree found, try next period
-	WARNING("Tree \"" << treename << "\" not found in file " << fpath);
+	ERROR("Tree \"" << treename << "\" not found in file " << fpath);
 	continue;
       }
       // save tree data in my histogram
@@ -1694,7 +1736,7 @@ TH1D * addperiod(Int_t process, const char * hname,
 
 void print_order()
 {
-  for (int i = 0; i < gMaxProcess; i++) {
+  for (Int_t i = 0; i < gMaxProcess; i++) {
     INFO("gOrder[" << i << "] = " << gOrder[gPadNr][i]);
   }
 }
@@ -1702,7 +1744,7 @@ void print_order()
 void auto_order()
 {
   DEBUG("Enter auto_order()");
-  double integral[gMaxProcess];
+  Double_t integral[gMaxProcess];
   // order all but data
   for (Int_t i = 0; i < gMaxProcess-1; i++) {
     integral[i] = 0;
@@ -1716,7 +1758,7 @@ void auto_order()
     }
     else {
       // otherwise order according to its integral.
-      double sum = gHisto[gPadNr][i]->Integral();
+      Double_t sum = gHisto[gPadNr][i]->Integral();
       // loop over all histograms which are joined with this one
       // and add the integral
       for (Int_t j = i+1; j < gMaxProcess-1; j++) {
@@ -1732,6 +1774,7 @@ void auto_order()
     DEBUG(gProcess[i].fname << ": " << integral[i]);
   }
   TMath::Sort(gMaxProcess-1, integral, gOrder[gPadNr]);
+  DEBUG("leave auto_order()");
 }
 
 void plot(const char * hname, const char * selection,
@@ -1754,7 +1797,7 @@ void plot(const char * hname, const char * selection,
     gHisto[gPadNr][process] = addperiod(process, hname,
 					selection, nbins, min, max);
   }
-
+  // order histograms according to integral
   if (gAutoOrder)
     auto_order();
   // compose histograms for drawing
@@ -1762,6 +1805,7 @@ void plot(const char * hname, const char * selection,
   // find maximum & minimum
   findmax();
   findmin();
+  draw();
 }
 
 void plotadd(const char * name1, const char * name2)
@@ -1789,6 +1833,7 @@ void plotadd(const char * name1, const char * name2)
   // find maximum & minimum
   findmax();
   findmin();
+  draw();
 }
 
 void plotadd(const char * name1, const char * name2,
@@ -1821,6 +1866,7 @@ void plotadd(const char * name1, const char * name2,
   // find maximum & minimum
   findmax();
   findmin();
+  draw();
 }
 
 TH2D * addperiod2(Int_t process, const char * hname,
@@ -1846,6 +1892,7 @@ TH2D * addperiod2(Int_t process, const char * hname,
     // get key from file
     char histname[strlen(hname)+4];
     sprintf(histname, "h2_%s", hname);
+    // sprintf(histname, "h2_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -1907,9 +1954,8 @@ TH2D * addperiod2(Int_t process, const char * hname,
   return hadd;
 }
 
-void plot2(const char * hname,
-	   const TH2D * hsample = 0, const char * selection = "global_weight",
-	   const char * drawopt = "box")
+void plot2(const char * hname, const TH2D * hsample, const char * selection,
+	   const char * drawopt)
 {
   // plot a two-dimensional plot in a new Canvas
   static TCanvas * gCanvas2 = 0;
@@ -1967,112 +2013,170 @@ void plot2(const char * hname,
   }
 }
 
-TH1D * signalHisto()
+TH3D * addperiod3(Int_t process, const char * hname,
+		  const TH3D * hsample, const char * selection)
 {
-  // creates a histogram containing only signal, extracted from global
-  // histograms gHisto[gPadNr][]. Can be used e.g. for fitting (see xsection.C)
-  decompose();
-  // loop over background MC's (not data)
-  TH1D * hSignal = 0;
-  Bool_t first = kTRUE;
-  for (Int_t j = 0; j < 3; j++) {
-    if (first) {
-      hSignal = new TH1D(*gHisto[gPadNr][j]);
-      hSignal->SetDirectory(0);
-      first = kFALSE;
+  // loops over currently selected periods and adds the histogram
+  // "hname" from the corresponding mc, returning the summary histogram
+  char fpath[400];
+  char mname[100];
+
+  TKey * key   = 0; // key from file
+  TH3D * htemp = 0;
+  TH3D * hadd  = 0;
+
+  for (Int_t period = gStart; period <= gEnd; period++) {
+    // open file
+    snprintf(fpath, 400, "%s/%s.root", getpath(period), gProcess[process].fname);
+    TFile * f = new TFile(fpath, "READ");
+    if (!f->IsOpen()) {
+      ERROR("File " << fpath << " not found.");
+      return 0;
+    }
+    // get key from file
+    char histname[strlen(hname)+4];
+    sprintf(histname, "h3_%s", hname);
+    // sprintf(histname, "h3_%i_%s", gStage, hname);
+    key = (TKey *) f->GetKey(histname);
+    DEBUG("Histogram key = " << key);
+    if (key == 0) {
+      // key has not been found, generate histogram from tree
+      // create specified histogram
+      // get tree from current file
+      const char * treename = gConfig->GetValue("treename", "t");
+      TTree * dtree = (TTree *) f->Get(treename);
+      if (dtree == 0) {
+	// no tree found, try next period
+	WARNING("Tree \"" << treename << "\" not found in file" << fpath);
+	continue;
+      }
+      if (!hsample) {
+	ERROR("No sample histogram given!");
+	delete f;
+	return 0;
+      }
+      // copy structure from sample histogram
+      htemp = new TH3D(*hsample);
+      htemp->SetName("htemp");
+      // save tree data in my histogram
+      snprintf(mname, 100, "%s>>htemp", hname);
+      dtree->Draw(mname, selection, "goff");
+      htemp->SetTitle(hname);
+      htemp->SetDirectory(0);
     }
     else {
-      hSignal->Add((TH1D *) gHisto[gPadNr][j], 1);
+      if (strcmp(key->GetClassName(), "TH3D")) {
+	ERROR("Can only plot two-dimensional histograms");
+	delete f;
+	return 0;
+      }
+      htemp = (TH3D * ) f->Get(histname);
+    }
+    // check physical minimum
+    if (htemp->GetMinimum() < 0) {
+      ERROR("Minimum " << htemp->GetMinimum() << " < 0 in file " << fpath);
+    }
+
+    // scale mc according to luminosity
+    if (process != gMaxProcess-1) { // do not scale data
+      Double_t mcLumi = gProcessInfo[period][process].Nev/gProcessInfo[period][process].xs;
+      Double_t weight = gLumi[period]/mcLumi * gProcessInfo[period][process].weight;
+      htemp->Scale(weight);
+    }
+
+    // add to summary histogram
+    if (hadd == 0) {
+      hadd = new TH3D(*htemp);
+      hadd->SetDirectory(0);
+    }
+    else {
+      hadd->Add(htemp);
+    }
+    // close file
+    delete f;
+  }
+  return hadd;
+}
+
+void plot3(const char * hname, const TH3D * hsample, const char * selection)
+{
+  // creation loop
+  for (Int_t process = 0; process < gMaxProcess; process++) {
+    // get summary histogram from all periods
+    if (gHisto3[gPadNr][process]) {
+      delete gHisto3[gPadNr][process];
+      gHisto3[gPadNr][process] = 0;
+    }
+    gHisto3[gPadNr][process] = addperiod3(process, hname, hsample, selection);
+    if (gHisto3[gPadNr][process] == 0) {
+      ERROR("Histogram " << hname << " not found for process " << process);
+      continue;
+    }
+    gHisto3[gPadNr][process]->SetTitle(gProcess[process].tname);
+  }
+}
+
+TH1D * signalHisto(const char * signal_name)
+{
+  // creates a histogram containing only signal, summing up all individual signal
+  // histograms whose file name contains "signal_name". 
+  // Can be used e.g. for fitting (see xsection.C)
+
+  // loop over background MC's (not data)
+  TH1D * hSignal = 0;
+  for (Int_t j = 0; j < gMaxSignal; j++) {
+    TH1D * histo = gHisto[gPadNr][j];
+    if (histo == 0)
+      continue;
+    TString s(gProcess[j].fname);
+    if (signal_name != 0 && !s.Contains(signal_name))
+      continue;
+    if (hSignal == 0) {
+      hSignal = new TH1D(*histo);
+      hSignal->SetDirectory(0);
+    }
+    else {
+      hSignal->Add(histo, 1);
     }
   }
-  compose();
 
   return hSignal;
 }
 
-TH1D * backgroundHisto()
+TH1D * backgroundHisto(const char * signal_name)
 {
-  // creates a histogram containing only background, extracted from global
-  // histograms gHisto[gPadNr][]. Can be used e.g. for fitting (see xsection.C)
-  decompose();
-  // loop over background MC's (not data)
+  // creates a histogram containing only background, summing up all individual
+  // background histograms and all signal histograms that do not start with "signal_name"
+  // Can be used e.g. for fitting (see xsection.C)
   TH1D * hBackground = 0;
-  Bool_t first = kTRUE;
-  for (Int_t j = 3; j < gMaxProcess-1; j++) {
-    if (first) {
-      hBackground = new TH1D(*gHisto[gPadNr][j]);
+  for (Int_t j = 0; j < gMaxProcess-1; j++) {
+    TH1D * histo = gHisto[gPadNr][j];
+    if (histo == 0)
+      continue;
+    TString s(gProcess[j].fname);
+    if (j < gMaxSignal && signal_name != 0 && s.Contains(signal_name))
+      continue;
+    if (hBackground == 0) {
+      hBackground = new TH1D(*histo);
       hBackground->SetDirectory(0);
-      first = kFALSE;
     }
     else {
-      hBackground->Add((TH1D *) gHisto[gPadNr][j], 1);
+      hBackground->Add(histo, 1);
     }
   }
-  compose();
-
   return hBackground;
 }
 
 TH1D * dataHisto()
 {
   // creates a histogram containing only data, extracted from global
-  // histograms gHisto[gPadNr][]. Can be used e.g. for fitting (see xsection.C)
-  TH1D * hData = new TH1D(*gHisto[gPadNr][gMaxProcess-1]);
+  // histograms gStack[gPadNr][]. Can be used e.g. for fitting (see xsection.C)
+  TH1D * histo = gHisto[gPadNr][gMaxProcess-1];
+  if (histo == 0)
+    return 0;
+  TH1D * hData = new TH1D(*histo);
   hData->SetDirectory(0);
   return hData;
-}
-
-void showintegral()
-{
-  // plots integral of all mc's
-  TCanvas * cint = new TCanvas("cint", "integral distribution",
-			       10,10, (Int_t) (600*TMath::Sqrt(2.)), 600);
-  cint->cd();
-  static TH1D ** hint;
-  hint = new TH1D * [gMaxProcess];
-  Double_t maxsum = 0;
-  // compute bin-to-bin efficiency and purity
-  for (Int_t process = 0; process < gMaxProcess; process++) {
-    // delete old histos
-    if (hint[process]) {
-      delete hint[process];
-      hint[process] = 0;
-    }
-    // skip non-existing mc's
-    if (gHisto[gPadNr][gOrder[gPadNr][process]] == 0)
-      continue;
-    // divide mc's into signal & background
-    hint[process] = new TH1D(*gHisto[gPadNr][gOrder[gPadNr][process]]);
-    hint[process]->Reset();
-    Double_t sum = 0;
-    // make integral distribution
-    for (Int_t bin = 1; bin <= hint[process]->GetNbinsX(); bin++) {
-      sum += gHisto[gPadNr][gOrder[gPadNr][process]]->GetBinContent(bin);
-      hint[process]->SetBinContent(bin, sum);
-    }
-    // find absolute maximum
-    if (sum > maxsum)
-      maxsum = sum;
-    // set line styles
-    hint[process]->SetLineColor(hint[process]->GetFillColor() == 10
-				 ? 1 : hint[process]->GetFillColor());
-    hint[process]->SetFillStyle(0);
-  }
-  // draw histograms
-  for (Int_t process = 0; process < gMaxProcess; process++) {
-    hint[process]->SetMaximum(maxsum);
-    if (process == 0) // first
-      hint[process]->Draw();
-    else if (process == gMaxProcess-1) { // data
-      hint[process]->SetLineStyle(gProcess[process].lstyle);
-      hint[process]->SetLineColor(1);
-      hint[process]->SetMarkerStyle(8);
-      hint[process]->SetMarkerSize(0.6);
-      hint[process]->Draw("e1psame");
-    }
-    else
-      hint[process]->Draw("same");
-  }
 }
 
 void smooth(TH1D * histo, Double_t xlow, Double_t xup, Int_t nbins)
@@ -2128,7 +2232,7 @@ void smooth(TH1D * histo, Double_t xlow, Double_t xup, Int_t nbins)
 TH1D * join(Int_t nhistos, TH1D * histo[])
 {
   // join the given histograms into one long histogram
-  static int joincount = 0;
+  static Int_t joincount = 0;
 
   joincount++;
   // first loop: count bins
