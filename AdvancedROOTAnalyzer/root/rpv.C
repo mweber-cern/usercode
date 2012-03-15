@@ -4,7 +4,10 @@
 
 #include "plot.h"
 #include "TMath.h"
-#endif
+#include "TROOT.h"
+#include "TFile.h"
+
+#endif // __CINT__
 
 using namespace std;
 
