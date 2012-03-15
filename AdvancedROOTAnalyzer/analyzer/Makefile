@@ -55,7 +55,7 @@ DATE	     := $(shell date "+%F")
 all:            $(PROGRAM)
 
 clean:
-		@rm -f $(OBJECTS) $(PROGRAM) $(DICT).* $(DEPENDS)
+		@rm -f $(OBJECTS) $(PROGRAM) $(DICT).* $(CUTFLOW).* $(DEPENDS)
 
 distclean:      clean
 		@rm -f *~ core *.def *.exp *.root *.ps .def gmon.out
