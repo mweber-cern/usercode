@@ -61,7 +61,7 @@ def join(job, period):
     except OSError:
         pass
     # Do not join if joinFile already newer than input files
-    if (joinDate > lastDate):
+    if (joinDate > lastDate and not options.force):
         return True
     # now join
     if isinstance (filelist, str):
@@ -102,6 +102,10 @@ def main():
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
                          default=ara.defaultConfigFileName)
+    optParser.add_option("-f", "--force-overwrite", dest="force",
+                         help="Force overwriting of existing .root files",
+                         action="store_true",
+                         default=False)
 
     (options, args) = optParser.parse_args()
     if len(args) < 1 or len(args) > 2:
@@ -126,7 +130,6 @@ def main():
 
     # Check ROOT version
     rootversion = ara.getCommandOutput2("root-config --version");
-    print rootversion
     first = rootversion.split("/")[0]
     fix   = rootversion.split("/")[1]
     major = int( first.split(".")[0])
