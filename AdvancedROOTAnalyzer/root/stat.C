@@ -15,10 +15,10 @@ Double_t chi2_int(Int_t start, Int_t end, Int_t & ndof, Int_t & nlow)
   ndof = 0;
   nlow = 0;
   Double_t temp, temp1;
-  TH1D * hmcsum = gHisto[gPadNr][gOrder[gPadNr][0]];
+  TH1D * hmcsum = gStack[gPadNr][gOrder[gPadNr][0]];
   if (hmcsum == 0) 
     return 0;
-  TH1D * hdata = gHisto[gPadNr][gMaxProcess-1];
+  TH1D * hdata = gStack[gPadNr][gMaxProcess-1];
   if (hdata == 0)
     return 0;
   for (Int_t i = start; i <= end; i++) {
@@ -57,29 +57,27 @@ void stat(Double_t low, Double_t up)
   Double_t  nTotErrBack   = 0;
 
   // for each mc/signal mc
-  Double_t  * nEvents   = new Double_t[gMaxProcess]; // number of selected events
-  Double_t  * nGene     = new Double_t[gMaxProcess]; // number of generated events
-  Double_t  * nExpected = new Double_t[gMaxProcess]; // number of expected events
-  Double_t  * weight    = new Double_t[gMaxProcess]; // weight of this MC
+  Double_t  * nEvents   = new Double_t[gMaxProcess-1]; // number of selected events
+  Double_t  * nGene     = new Double_t[gMaxProcess-1]; // number of generated events
+  Double_t  * nExpected = new Double_t[gMaxProcess-1]; // number of expected events
+  Double_t  * weight    = new Double_t[gMaxProcess-1]; // weight of this MC
 
   // find bins to start and end with
   Int_t start, end;
   findbins(low, up, start, end);
 
   // total number of data events
-  if (gHisto[gPadNr][gMaxProcess-1])
-    nData   = gHisto[gPadNr][gMaxProcess-1]->Integral(start, end);
+  if (gStack[gPadNr][gMaxProcess-1]) {
+    nData   = gStack[gPadNr][gMaxProcess-1]->Integral(start, end);
+  }
 
   // total number of mc events
   Int_t hstart = FindFirstHisto();
   if ((hstart >= 0) && (hstart < gMaxProcess-1)) {
-    nTotal  = gHisto[gPadNr][hstart]->Integral(start, end);
+    nTotal  = gStack[gPadNr][hstart]->Integral(start, end);
   }
 
-  // decompose histograms
-  decompose();
-
-  // compute numbers for each mc separately, respecting drawing/summing order
+  // compute numbers for each mc separately
   for (Int_t i = 0; i < gMaxProcess-1; i++) {
     if (gHisto[gPadNr][i] == 0) {
       // mc does not exist
@@ -93,10 +91,13 @@ void stat(Double_t low, Double_t up)
     nEvents[i] = gHisto[gPadNr][i]->Integral(start, end);
     // get expected number from global process information
     nExpected[i] = 0.;
+    weight[i] = 0.;
     for (Int_t period = gStart; period <= gEnd; period++) {
       // compute expected events
       nExpected[i] += gLumi[period] * gProcessInfo[period][i].xs;
-      // INFO("gLumi[" << period << "]=" << gLumi[period] << ", xs = " << gProcessInfo[period][i].xs);
+      DEBUG("gLumi[" << period << "]=" << gLumi[period] << ", xs = " 
+	    << gProcessInfo[period][i].xs);
+      DEBUG("nExpected = " << nExpected[i]);
       // compute generated events
       nGene[i] += gProcessInfo[period][i].Nev;
       double mcLumi = gProcessInfo[period][i].Nev/gProcessInfo[period][i].xs;
@@ -111,17 +112,14 @@ void stat(Double_t low, Double_t up)
     }
   }
 
-  // add histograms together
-  compose();
-
   Double_t effi; // efficiency
   Double_t puri; // purity
   Double_t nErr; // error on number of selected events
 
   printf("*******************************************************************************\n");
-  Int_t  nfill = 15 - strlen(gHisto[gPadNr][hstart]->GetName());
+  Int_t  nfill = 15 - strlen(gStack[gPadNr][hstart]->GetName());
   printf("%15s       N_events +/-    Delta_N      effi      purity  av. weight\n", 
-	 gHisto[gPadNr][hstart]->GetName());
+	 gStack[gPadNr][hstart]->GetName());
   printf("*******************************************************************************\n");
   // inform user for each mc (ordered)
   for (Int_t k = 0; k < gMaxProcess-1; k++) {
@@ -174,19 +172,19 @@ void stat(Double_t low, Double_t up)
   Double_t uflow  = 0;
   Double_t oflow  = 0;
   if (hindex >= 0) {
-    uflow      = gHisto[gPadNr][hindex]->GetBinContent(0);
-    Int_t obin = gHisto[gPadNr][hindex]->GetNbinsX()+1;
-    oflow      = gHisto[gPadNr][hindex]->GetBinContent(obin);
+    uflow      = gStack[gPadNr][hindex]->GetBinContent(0);
+    Int_t obin = gStack[gPadNr][hindex]->GetNbinsX()+1;
+    oflow      = gStack[gPadNr][hindex]->GetBinContent(obin);
   }
   printf("total mc:         %12.3f +/- %10.3f (u: %7.3f) (o: %7.3f)   Lumi:\n", 
 	 nTotal, TMath::Sqrt(nTotErrSig+nTotErrBack), uflow, oflow);
   // total, under & overflow data
   uflow  = 0;
   oflow  = 0;
-  if (gHisto[gPadNr][gMaxProcess-1]) {
-    uflow      = gHisto[gPadNr][gMaxProcess-1]->GetBinContent(0);
-    Int_t obin = gHisto[gPadNr][gMaxProcess-1]->GetNbinsX()+1;
-    oflow      = gHisto[gPadNr][gMaxProcess-1]->GetBinContent(obin);
+  if (gStack[gPadNr][gMaxProcess-1]) {
+    uflow      = gStack[gPadNr][gMaxProcess-1]->GetBinContent(0);
+    Int_t obin = gStack[gPadNr][gMaxProcess-1]->GetNbinsX()+1;
+    oflow      = gStack[gPadNr][gMaxProcess-1]->GetBinContent(obin);
   }
   // compute lumi
   Double_t lumi = 0;
@@ -222,11 +220,11 @@ void chi2(Double_t low = 0, Double_t up = 0)
   Int_t start, end;
   if (low == up) {
     start = 1;
-    end   = gHisto[gPadNr][0]->GetNbinsX();
+    end   = gStack[gPadNr][0]->GetNbinsX();
   } 
   else {
-    start = gHisto[gPadNr][0]->GetXaxis()->FindBin(low);
-    end   = gHisto[gPadNr][0]->GetXaxis()->FindBin(up);
+    start = gStack[gPadNr][0]->GetXaxis()->FindBin(low);
+    end   = gStack[gPadNr][0]->GetXaxis()->FindBin(up);
   }
 
   // compute chi2
@@ -253,11 +251,11 @@ void chi2low(Double_t low = 0, Double_t up = 0, Int_t nevents = 100000)
   Int_t start, end;
   if (low == up) {
     start = 1;
-    end   = gHisto[gPadNr][0]->GetNbinsX();
+    end   = gStack[gPadNr][0]->GetNbinsX();
   } 
   else {
-    start = gHisto[gPadNr][0]->GetXaxis()->FindBin(low);
-    end   = gHisto[gPadNr][0]->GetXaxis()->FindBin(up);
+    start = gStack[gPadNr][0]->GetXaxis()->FindBin(low);
+    end   = gStack[gPadNr][0]->GetXaxis()->FindBin(up);
   }
 
   Double_t ChiSquare;
@@ -271,7 +269,7 @@ void chi2low(Double_t low = 0, Double_t up = 0, Int_t nevents = 100000)
     // loop over each bin
     for (Int_t j = start; j <= end; j++) {
       // get theorie value
-      nTheorie = gHisto[gPadNr][gOrder[gPadNr][0]]->GetBinContent(j);
+      nTheorie = gStack[gPadNr][gOrder[gPadNr][0]]->GetBinContent(j);
       if (nTheorie < 1E-9)
 	continue;
 
@@ -321,8 +319,8 @@ Double_t loglikelihood(TH1D * hmc, TH1D * hdata, Int_t start, Int_t end)
 void loglikdistrib(Int_t ntrials = 10000, Bool_t print = kFALSE)
 {
   // compute distribution of log likelihood value
-  TH1D * hmc   = gHisto[gPadNr][gOrder[gPadNr][0]];
-  TH1D * hdata = gHisto[gPadNr][gMaxProcess-1];
+  TH1D * hmc   = gStack[gPadNr][gOrder[gPadNr][0]];
+  TH1D * hdata = gStack[gPadNr][gMaxProcess-1];
   Int_t nbins = hmc->GetNbinsX();
   Double_t loglik = loglikelihood(hmc, hdata, 1, nbins);
   TH1D * htest = new TH1D(*hdata);
@@ -406,11 +404,8 @@ void searchcut(Bool_t low)
   DEBUG("first histogram found: " << gProcess[start].fname);
 
   // norm purity to total number of events
-  TH1D * htotal = new TH1D(*gHisto[gPadNr][start]);
+  TH1D * htotal = new TH1D(*gStack[gPadNr][start]);
   DEBUG("Total number of MC events: " << htotal->Integral());
-
-  // look at each histo for itself
-  decompose();
 
   for (Int_t process = 0; process < gMaxSignal; process++) {
     DEBUG("processsing " << gProcess[process].fname);
@@ -507,7 +502,6 @@ void searchcut(Bool_t low)
 	   gProcess[process].fname,
 	   hep[process]->GetBinLowEdge(hep[process]->GetMaximumBin()));
   }
-  compose();
   cd(gPadNr+1);
 }
 
@@ -528,16 +522,16 @@ void integral(Bool_t up = kTRUE, Bool_t draw=kTRUE)
   Int_t start = FindFirstHisto();
   if (start < 0)
     return;
-  if (gHisto[gPadNr][gMaxProcess-1] == 0) {
+  if (gStack[gPadNr][gMaxProcess-1] == 0) {
     printf("ERR: no data histo\n");
     return;
   }
 
-  TH1D * mc = gHisto[gPadNr][start];
+  TH1D * mc = gStack[gPadNr][start];
   TH1D * hintmc = (TH1D *) mc->Clone();
   hintmc->Reset();
   hintmc->SetName("hintmc");
-  TH1D * data = gHisto[gPadNr][gMaxProcess-1];
+  TH1D * data = gStack[gPadNr][gMaxProcess-1];
   TH1D * hintdata = (TH1D *) data->Clone();
   hintdata->Reset();
   hintdata->SetName("hintdata");
