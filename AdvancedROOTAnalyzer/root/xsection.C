@@ -22,21 +22,6 @@ TH1D * gSign[3][3] = { { 0 }, { 0 }, { 0 } };
 TH1D * gBack[3] = { 0 };
 TH1D * gData[3] = { 0 };
 
-TH1D * signalHisto()
-{
-  return 0;
-}
-
-TH1D * backgroundHisto()
-{
-  return 0;
-}
-
-TH1D * dataHisto()
-{
-  return 0;
-}
-
 void BinnedPoissonianLikelihood(Int_t    & npar,  // # of internal parameters
 				Double_t * grad,  // array of first derivatives
 				Double_t & fval,  // the function value
@@ -573,9 +558,9 @@ void xsection(Int_t order = 1, const Text_t * histo = "hLm5c")
   }
   Double_t xs[4];
   // save cross-section and errors here...
-  for (Int_t period = start; period <= end; period++) {
+  for (Int_t p = start; p <= end; p++) {
     // only one energy
-    periods(gPeriod[period]);
+    period(gPeriod[p]);
     // plot histogram to get cross-section from...
     plot(histo);
     // fill global histos
@@ -591,7 +576,7 @@ void xsection(Int_t order = 1, const Text_t * histo = "hLm5c")
     // get theoretical cross-section
     Double_t xstheorie = 0;
     for (Int_t i = 0; i < 3; i++) {
-      xstheorie += gProcessInfo[period][i].xs;
+      xstheorie += gProcessInfo[p][i].xs;
     }
     printf("%s %10.5f %+10.5f %+10.5f\n", 
 	   gPeriod[gStart], 
@@ -602,7 +587,7 @@ void xsection(Int_t order = 1, const Text_t * histo = "hLm5c")
   }
   fclose(outfile);
   // select old energies...
-  periods(gPeriod[start], gPeriod[end]);
+  period(gPeriod[start], gPeriod[end]);
   gFitSignal = 0;
   gFitBackground = 0;
   gFitData = 0;
@@ -747,7 +732,6 @@ void correctfactor(const char * pname, Double_t xlow, Double_t xup)
     return;
   }
   // now loop over processes to get "signal" and "background"
-  decompose();
   gFitSignal = 0;
   gFitBackground = 0;
   for (Int_t process = 0; process < gMaxProcess-1; process++) {
@@ -774,7 +758,6 @@ void correctfactor(const char * pname, Double_t xlow, Double_t xup)
     }
   }
   gFitData = new TH1D(*gHisto[gPadNr][gMaxProcess-1]);
-  compose();
   // only fit in requested range by zeroing out signal values
   Int_t binlow, binup;
   findbins(xlow, xup, binlow, binup);
@@ -817,10 +800,10 @@ void allcorrect(Text_t * hname, Text_t * pname, Double_t xlow, Double_t xup)
 {
   Int_t oldstart = gStart;
   Int_t oldend   = gEnd;
-  for (Int_t period = oldstart; period <= oldend; period++) {
-    periods(gPeriod[period]);
+  for (Int_t p = oldstart; p <= oldend; p++) {
+    period(gPeriod[p]);
     plot(hname);
     correctfactor(pname, xlow, xup);
   }
-  periods(gPeriod[oldstart], gPeriod[oldend]);
+  period(gPeriod[oldstart], gPeriod[oldend]);
 }

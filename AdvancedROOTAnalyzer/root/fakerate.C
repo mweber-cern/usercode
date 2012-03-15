@@ -11,6 +11,8 @@ using namespace std;
 #include "THashList.h"
 #include "TString.h"
 #include "TMath.h"
+#include "TTree.h"
+#include "TKey.h"
 
 #include "plot.h"
 #include "stat.h"
@@ -158,13 +160,113 @@ TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
   return hRatio1;
 }
 
-void ratioplot()
+TH1D * get_1d_ratio(TH3D * hTight3, TH3D * hLoose3) 
+{
+  // project on x-axis
+  TH1D * hTight1 = (TH1D *) hTight3->Project3D("x");
+  TH1D * hLoose1 = (TH1D *) hLoose3->Project3D("x");
+  TH1D * hRatio1 = new TH1D(*hTight1);
+  hRatio1->SetDirectory(0);
+  hRatio1->SetName("hRatio1");
+  hRatio1->SetTitle("Tight/Loose ratio (T/L)");
+
+  // divide with binomial errors
+  hRatio1->Divide(hTight1, hLoose1, 1., 1., "B");
+  return hRatio1;
+}
+
+void ratioplot(const char * sele = "tightloose")
+{
+  DEBUG("ratioplot() start");
+  MakeCanvas();
+  selection(sele);
+  period("2011");
+
+  DEBUG("reading histograms");
+  // "plot" histograms, i.e. read into memory
+  cd(1);
+  plot3("TightMuons");
+  cd(2);
+  plot3("LooseMuons");
+  cd(1);
+
+  TLegend * leg = new TLegend(0.53, 0.52, 0.77, 0.84);
+  setopt(leg);
+  Bool_t first = kTRUE;
+
+  // get summed histograms
+  vector<Int_t> entries;
+  TH3D * hTightSum = 0;
+  TH3D * hLooseSum = 0;
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    Int_t process = gOrder[0][i];
+    // not existing
+    TH3D * hTight3 = gHisto3[0][process];
+    TH3D * hLoose3 = gHisto3[1][process];
+    if (hTight3 == 0 || hLoose3 == 0)
+      continue;
+    // if joined, it was already considered in previous iteration
+    if (gProcess[process].join)
+      continue;
+    if (strncmp(gProcess[process].fname, "qcd", 3) &&
+	strncmp(gProcess[process].fname, "dyll", 4) &&
+	strncmp(gProcess[process].fname, "ttjets", 3) &&
+	strncmp(gProcess[process].fname, "data", 3))
+      continue;
+    DEBUG("Creating histos for process " << gProcess[process].fname);
+    hTightSum = new TH3D(*hTight3);
+    hLooseSum = new TH3D(*hLoose3);
+    // check if histograms are joined -> we need to add statistics
+    for (Int_t j = i+1; j < gMaxProcess; j++) {
+      Int_t proc = gOrder[0][j];
+      // only add joined histograms
+      if (!gProcess[proc].join)
+	break;
+      // not existing
+      if (gHisto3[0][proc] == 0 || gHisto3[1][proc] == 0)
+	continue;
+      DEBUG("Adding histos for process " << gProcess[proc].fname);
+      hTightSum->Add(gHisto3[0][proc], 1.);
+      hLooseSum->Add(gHisto3[1][proc], 1.);
+    }
+    DEBUG("Getting ratio");
+    TH1D * histo = get_1d_ratio(hTightSum, hLooseSum);
+    setopt(histo);
+    histo->SetLineColor(gProcess[process].lcolor);
+    histo->SetLineStyle(gProcess[process].lstyle);
+    DEBUG("Adding to legend");
+    if (process != gMaxProcess-1) {
+      leg->AddEntry(histo, gProcess[process].tname, "l");
+    }
+    else {
+      leg->AddEntry(histo, gProcess[process].tname);
+    }
+    DEBUG("Draw");
+    if (first) {
+      histo->SetMaximum(1.);
+      histo->SetMinimum(0.);
+      histo->SetXTitle("p_{T}(#mu) [GeV]");
+      histo->SetYTitle("T/L ratio");
+      histo->Draw("ehisto");
+      first = kFALSE;
+    }
+    else {
+      if (process == gMaxProcess-1) {
+	histo->SetMarkerStyle(gProcess[gMaxProcess-1].marker);
+	histo->Draw("epsame");
+      }
+      else {
+	histo->Draw("ehistosame");
+      }
+    }
+  }
+  leg->Draw();
+}
+
+void old_ratioplot()
 {
   selection("tightloose");
   period("2011");
-
-  TCanvas * c1 = new TCanvas("c1", "Tight-to-Loose ratio plots", 10, 10, (int) 600.*TMath::Sqrt(2.), 600);
-  setopt(c1);
 
   // get histograms for each process
   bool first = true;
@@ -177,7 +279,6 @@ void ratioplot()
     histo->SetLineColor(gProcess[i].lcolor);
     histo->SetLineStyle(gProcess[i].lstyle);
     leg->AddEntry(histo, "l", gProcess[i].fname);
-    c1->cd();
     if (first) {
       histo->Draw("histo");
       first = false;
