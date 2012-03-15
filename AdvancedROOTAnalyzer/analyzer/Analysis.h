@@ -54,6 +54,7 @@ protected:
   TH3D  *   fFakeRateHisto3D;
   TH2D  *   fFakeRateHisto2D;
   Int_t     fFakeRateDimensions;
+  Int_t     fJets;
 
 public:
   Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile);

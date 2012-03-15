@@ -20,7 +20,7 @@
 
 using namespace std;
 
-// externally generated with 
+// externally generated with ../bin/gencutflow.py
 extern TH1D * get_cutflow_histogram();
 
 // return true if a ROOT file named "fileName" exists
@@ -439,11 +439,10 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   // compute variables
   int nMuonsLoose = loose_muons.size();
   int nMuonsTight = tight_muons.size();
-  int nJets = jets.size();
   // fill histograms before cuts
   Fill("TL_met", met_et[3]);
   Fill("TL_metsig", met_etsignif[3]);
-  Fill("TL_jetpt", nJets > 0 ? pfjet_pt[jets[0]] : 0);
+  Fill("TL_jetpt", fJets > 0 ? pfjet_pt[jets[0]] : 0);
   Fill("TL_HT", HT);
   Fill("TL_nloose", nMuonsLoose);
 
@@ -451,13 +450,13 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   TCutList QCDCuts;
   QCDCuts.Set("TL_met", met_et[3] < 50); // mainly against ttbar, and a bit w->l nu
   QCDCuts.Set("TL_HT", HT > 200); // remove Drell-Yan and signal
-  QCDCuts.Set("TL_jetpt", nJets > 0 ? pfjet_pt[jets[0]] > 40 : false); // trigger
+  QCDCuts.Set("TL_jetpt", fJets > 0 ? pfjet_pt[jets[0]] > 40 : false); // trigger
   QCDCuts.Set("TL_nloose", (nMuonsLoose > 0) && (nMuonsLoose < 2)); // (for fakes) && (against Drell-Yan)
 
   if (QCDCuts.PassesAllBut("TL_met"))
     Fill("nTL_met", met_et[3]);
   if (QCDCuts.PassesAllBut("TL_jetpt"))
-    Fill("nTL_jetpt", nJets > 0 ? pfjet_pt[jets[0]] : 0);
+    Fill("nTL_jetpt", fJets > 0 ? pfjet_pt[jets[0]] : 0);
   if (QCDCuts.PassesAllBut("TL_HT"))
     Fill("nTL_HT", HT);
   if (QCDCuts.PassesAllBut("TL_nloose"))
@@ -487,8 +486,11 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
     Fill("TL_MT", MT);
 
     // require muons to be on "opposite" side to jet in phi and reject W->l nu
-    if (dphi < 1.0 || MT > 175.)
+    if (dphi < 1.0 || MT > 100.)
       continue;
+
+    // some more histograms
+    Fill("TL_nJets", fJets);
 
     // fill histograms in order to compute tight/loose ratio
     Fill("LooseMuons",
@@ -662,9 +664,9 @@ void Analysis::Loop()
 	}
       }
       else if (fAnalysisType == "tightloose") {
-	if (fTrigger->Contains("HLT_Mu8_Jet40") ||
-	    fTrigger->Contains("HLT_Mu8") ||
-	    fTrigger->Contains("HLT_Mu15")
+	if (fTrigger->Contains("HLT_Mu8_Jet40")
+	    // || fTrigger->Contains("HLT_Mu8")
+	    // || fTrigger->Contains("HLT_Mu15")
 	  ) {
 	  rejection = false;
 	  break;
@@ -715,16 +717,62 @@ void Analysis::Loop()
     }
 
     // Electrons
-    // https://twiki.cern.ch/twiki/bin/viewauth/CMS/SimpleCutBasedEleID2011
+    // https://twiki.cern.ch/twiki/bin/view/CMS/SimpleCutBasedEleID
     int nElectron = 0;
     TCutList ElectronCuts;
-    for (int i = 0; i <pfele_n; i++) {
-      // set cuts
-      ElectronCuts.Set("pfele_pt", pfele_pt[i] > 15.);
+    for (int i = 0; i < ele_n; i++) {
+      // cut values for WP80 (to be moved to configuration file)
+      const Double_t cutconvdcot = 0.02;
+      const Double_t cutconvdist = 0.02;
+      const Double_t cutMissingHits = 0.;
+      const Double_t cutDr03TkSumPtele_ptB = 0.09;
+      const Double_t cutDr03TkSumPtele_ptE = 0.04;
+      const Double_t cutDr03HCalSumEtele_EtB = 0.1;
+      const Double_t cutDr03HCalSumEtele_EtE = 0.025;
+      const Double_t cutDr03ECalSumEtele_EtB = 0.07;
+      const Double_t cutDr03ECalSumEtele_EtE = 0.05;
+      const Double_t cutHCalOverEmB = 0.04;
+      const Double_t cutHCalOverEmE = 0.025;
+      const Double_t cutSigmaIetaIetaB = 0.01;
+      const Double_t cutSigmaIetaIetaE = 0.03;
+      const Double_t cutdPhiSCTrackAtVtxB = 0.06;
+      const Double_t cutdPhiSCTrackAtVtxE = 0.03;
+      const Double_t cutdEtaSCTrackAtVtxB = 0.004;
+      const Double_t cutdEtaSCTrackAtVtxE = 0.007;
+
+      // own cuts
+      ElectronCuts.Set("Et", ele_caloEt[i] > 15.0);
+      // common cuts
+      ElectronCuts.Set("MissingHits", ele_TrkExpHitsInner[i] <= cutMissingHits);
+      ElectronCuts.Set("Dist", fabs(ele_convdist[i]) > cutconvdist);
+      ElectronCuts.Set("DCotT", fabs(ele_convdcot [i]) > cutconvdcot);
+      if (fabs(ele_SCeta[i])<1.4442) {
+	// Barrel
+	ElectronCuts.Set("trackRel03", ele_Dr03TkSumPt[i]/ele_pt[i] < cutDr03TkSumPtele_ptB);
+	ElectronCuts.Set("ecalRel03", ele_Dr03ECalSumEt[i]/ele_Et[i] < cutDr03ECalSumEtele_EtB);
+	ElectronCuts.Set("hcalRel03", ele_Dr03HCalSumEt[i]/ele_Et[i] < cutDr03HCalSumEtele_EtB);
+	ElectronCuts.Set("SigmaIEtaIEta", ele_SigmaIetaIeta[i] < cutSigmaIetaIetaB);
+	ElectronCuts.Set("DPhi", fabs(ele_dPhiSCTrackAtVtx[i]) < cutdPhiSCTrackAtVtxB);
+	ElectronCuts.Set("DEta", fabs(ele_dEtaSCTrackAtVtx[i]) < cutdEtaSCTrackAtVtxB);
+	ElectronCuts.Set("HoE", ele_HCalOverEm[i] < cutHCalOverEmB);
+      }
+      else if (1.566 < fabs(ele_SCeta[i]) && fabs(ele_SCeta[i]) < 2.5) {
+	// Endcap
+	ElectronCuts.Set("trackRel03", ele_Dr03TkSumPt[i]/ele_pt[i] < cutDr03TkSumPtele_ptE);
+	ElectronCuts.Set("ecalRel03", ele_Dr03ECalSumEt[i]/ele_Et[i] < cutDr03ECalSumEtele_EtE);
+	ElectronCuts.Set("hcalRel03", ele_Dr03HCalSumEt[i]/ele_Et[i] < cutDr03HCalSumEtele_EtE);
+	ElectronCuts.Set("SigmaIEtaIEta", ele_SigmaIetaIeta[i] < cutSigmaIetaIetaE);
+	ElectronCuts.Set("DPhi", fabs(ele_dPhiSCTrackAtVtx[i]) < cutdPhiSCTrackAtVtxE);
+	ElectronCuts.Set("DEta", fabs(ele_dEtaSCTrackAtVtx[i]) < cutdEtaSCTrackAtVtxE);
+	ElectronCuts.Set("HoE", ele_HCalOverEm[i] < cutHCalOverEmE);
+      }
+      else {
+	// ignore electrons in gap between barrel and endcap
+      }
 
       // fill N-1
-      if (ElectronCuts.PassesAllBut("pfele_pt"))
-	Fill("nPfele_pt", pfele_pt[i]);
+      if (ElectronCuts.PassesAllBut("Et"))
+	Fill("nElectron_Et", pfele_pt[i]);
 
       // apply cuts
       if (ElectronCuts.PassesAll())
@@ -805,9 +853,10 @@ void Analysis::Loop()
       for (int k = 0; k < muo_trign[muons[i]]; k++) {
 	*fTrigger = unpack(trig_name[muo_trig[muons[i]][k]]);
 	if (fAnalysisType == "tightloose") {
-	  if (fTrigger->Contains("HLT_Mu8") ||
-	      fTrigger->Contains("HLT_Mu15") ||
-	      fTrigger->Contains("HLT_Mu8_Jet40")) {
+	  if (//fTrigger->Contains("HLT_Mu8") ||
+	      //fTrigger->Contains("HLT_Mu15") ||
+	      fTrigger->Contains("HLT_Mu8_Jet40")
+	    ) {
 	    matched++;
 	  }
 	}
@@ -888,7 +937,7 @@ void Analysis::Loop()
 	HT += pfjet_Et[i];
       }
     }
-    int nJets = jets.size();
+    fJets = jets.size();
 
     //////////////////////////////////////////////////////////////////////
     // muon/jet arbitration
@@ -900,7 +949,7 @@ void Analysis::Loop()
       // only those PF jets that do not "coincide" with a tight muon
       double Rmin = 1000;
       Int_t jet_min = -1;
-      for (int j = 0; j < nJets; j++) {
+      for (int j = 0; j < fJets; j++) {
 	TLorentzVector jet(pfjet_px[j], pfjet_py[j], pfjet_pz[j], pfjet_E[j]);
 	double R = mu.DeltaR(jet);
 	if (R < Rmin) {
@@ -954,10 +1003,10 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // loose jet id
-    Fill("Jet_pt0", nJets > 0 ? pfjet_pt[jets[0]] : 0);
-    Fill("Jet_pt1", nJets > 1 ? pfjet_pt[jets[1]] : 0);
-    Fill("Jet_pt", nJets > 0 ? pfjet_pt[jets[0]] : 0, nJets > 1 ? pfjet_pt[jets[1]] : 0);
-    if (nJets < 2 || pfjet_pt[jets[0]] <= 30. || pfjet_pt[jets[1]] <= 30.) {
+    Fill("Jet_pt0", fJets > 0 ? pfjet_pt[jets[0]] : 0);
+    Fill("Jet_pt1", fJets > 1 ? pfjet_pt[jets[1]] : 0);
+    Fill("Jet_pt", fJets > 0 ? pfjet_pt[jets[0]] : 0, fJets > 1 ? pfjet_pt[jets[1]] : 0);
+    if (fJets < 2 || pfjet_pt[jets[0]] <= 30. || pfjet_pt[jets[1]] <= 30.) {
       continue;
     }
     Fill("cutflow", "jetid");
@@ -1192,7 +1241,7 @@ void Analysis::CreateHistograms()
   CreateHisto("nObj_vtx_bs", "|r_{bs} - r_{vtx}|@cm", 100, 0, 10);
 
   // Object selection: electron
-  CreateHisto("nPfele_pt", "particle flow electron p_{T}@GeV", 1000, 0, 1000);
+  CreateHisto("nElectron_Et", "Electron E_{T}@GeV", 1000, 0, 1000);
 
   // Object selection: muon
   CreateHisto("nMuon_pt", "#mu p_{T}@GeV", 1000, 0, 1000);
@@ -1237,9 +1286,9 @@ void Analysis::CreateHistograms()
 
   // Tight-to-loose ratio
   CreateHisto("TightMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV", 
-	      5, 0, 50, 5, 0, 2.5, 10, 0, 100);
+	      11, 15, 70, 5, 0, 2.5, 6, 40, 100);
   CreateHisto("LooseMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV", 
-	      5, 0, 50, 5, 0, 2.5, 10, 0, 100);
+	      11, 15, 70, 5, 0, 2.5, 6, 40, 100);
 
   CreateHisto("nTL_met", "MET@GeV", 100, 0, 500);
   CreateHisto("nTL_jetpt", "leading jet pt@GeV", 150, 0, 1500);
@@ -1255,6 +1304,7 @@ void Analysis::CreateHistograms()
   CreateHisto("TL_nloose", "number of loose muons", 5, 0, 5);
   CreateHisto("TL_zmass", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
   CreateHisto("TL_MT", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
+  CreateHisto("TL_nJets", "number of jets", 10, -0.5, 9.5);
 
   // double-fake estimate
   CreateHisto("DF_pt", "p_{T}(#mu) (doublefake)@GeV", 5, 0, 50);
@@ -1330,21 +1380,22 @@ void Analysis::CreateBranches()
   fOutputTree.Branch("fMuoId", & fMuoId, "fMuoId[2]/I");
   fOutputTree.Branch("fSigMu", & fSigMu, "fSigMu[2]/I");
   fOutputTree.Branch("fSigJet", & fSigJet, "fSigJet[2]/I");
+  fOutputTree.Branch("fJets", & fJets, "fJets/I");
 }
 
 void Analysis::CreateHisto(const char * name, const char * title, Int_t nbinsx, Double_t xlow, Double_t xup)
 {
-  histo[name] = new TH1D(Form("h1_%s", name), title, nbinsx, xlow, xup);
+  histo[name] = new TH1D(Form("h1_0_%s", name), title, nbinsx, xlow, xup);
 }
 
 void Analysis::CreateHisto(const char * name, const char * title, Int_t nbinsx, Double_t xlow, Double_t xup, Int_t nbinsy, Double_t ylow, Double_t yup)
 {
-  histo2[name] = new TH2D(Form("h2_%s", name), title, nbinsx, xlow, xup, nbinsy, ylow, yup);
+  histo2[name] = new TH2D(Form("h2_0_%s", name), title, nbinsx, xlow, xup, nbinsy, ylow, yup);
 }
 
 void Analysis::CreateHisto(const char * name, const char * title, Int_t nbinsx, Double_t xlow, Double_t xup, Int_t nbinsy, Double_t ylow, Double_t yup, Int_t nbinsz, Double_t zlow, Double_t zup)
 {
-  histo3[name] = new TH3D(Form("h3_%s", name), title, nbinsx, xlow, xup, nbinsy, ylow, yup, nbinsz, zlow, zup);
+  histo3[name] = new TH3D(Form("h3_0_%s", name), title, nbinsx, xlow, xup, nbinsy, ylow, yup, nbinsz, zlow, zup);
 }
 
 void Analysis::Fill(const char * name, double value)
