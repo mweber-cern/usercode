@@ -1669,8 +1669,7 @@ TH1D * addperiod(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    sprintf(histname, "h1_%s", hname);
-    // sprintf(histname, "h1_%i_%s", gStage, hname);
+    sprintf(histname, "h1_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -1891,8 +1890,7 @@ TH2D * addperiod2(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    sprintf(histname, "h2_%s", hname);
-    // sprintf(histname, "h2_%i_%s", gStage, hname);
+    sprintf(histname, "h2_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -2035,8 +2033,7 @@ TH3D * addperiod3(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    sprintf(histname, "h3_%s", hname);
-    // sprintf(histname, "h3_%i_%s", gStage, hname);
+    sprintf(histname, "h3_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
