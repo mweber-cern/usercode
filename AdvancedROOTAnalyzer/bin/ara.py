@@ -8,6 +8,8 @@ import os
 import sys
 import ConfigParser
 import subprocess
+import getpass
+import time
 
 ######################################################################
 # global variables keeping options and configuration
@@ -34,17 +36,21 @@ def getCommandOutput2(command):
         raise RuntimeError, '%s failed with exit code %d' % (command, err)
     return data
 
-######################################################################
-# list the contents of the given directory on the grid storage element
-# returns a list of [filesize, filename]
-# depends on global configuration object
-def srmls(dir, verbose=False):
+def getStoragePath(directory):
     global config
     user = config.get('Grid', 'user')
     se = config.get('Grid', 'se')
     sp = config.get('Grid', 'sp')
-    path = sp+'/'+user+'/'+dir+'/'
+    path = sp+'/'+user+'/'+directory+'/'
     path = path.replace('//', '/')
+    return (se, path)
+
+######################################################################
+# list the contents of the given directory on the grid storage element
+# returns a list of [filesize, filename]
+# depends on global configuration object
+def srmls(directory, verbose=False):
+    (se, path) = getStoragePath(directory)
     offset = 0
     files = []
     foundall = False
@@ -73,17 +79,28 @@ def srmls(dir, verbose=False):
                 continue
             if verbose:
                 print size, fname
-                files.append([size, fname])
+            files.append([size, fname])
         if len(files) == 999:
             offset = offset + 999;
         else:
             foundall = True
     return files
 
-######################################################################
-# divide given file list into a predefined number of equally sized chunks
-# 
+def srmrm(directory, filenames):
+    (se, path) = getStoragePath(directory)
+    command = 'srmrm ' 
+    for filename in filenames:
+        print filename
+        command = command + " "  + se + path + filename
+    msg = getCommandOutput2(command)
+    return msg
+
+def srmrmdir(directory):
+    (se, path) = getStoragePath(directory)
+    return getCommandOutput2('srmrmdir '+se+path)
+
 def split_in_jobs(filenames, njobs):
+    """divide given file list into a predefined number of equally sized chunks"""   
     # catch the case where a single file name is given, not a list
     list_of_lists = [ ]
     if isinstance(filenames, str):
@@ -156,3 +173,28 @@ def check_log(logfilename, errors, warnings, requirements):
 
     # inform user
     return True
+
+def wait_for_jobs(njobs):
+    wait = True
+    while wait:
+        # check how many jobs are running already
+        ntrial = 0
+        while (ntrial < 3):
+            try:
+                joblist = getCommandOutput2("condor_q");
+                break
+            except RuntimeError as message:
+                print message
+                print "Waiting for condor to settle..."
+                time.sleep(60)
+                ntrial += 1
+        jobcount = 0
+        for line in joblist.splitlines():
+            if getpass.getuser() in line:
+                jobcount += 1
+        # if the maximal job count is exceeded, sleep for a while
+        if jobcount >= njobs:
+            print "Reached " + str(njobs) + " jobs, sleeping for 30 s..."
+            time.sleep(30)
+        else:
+            wait = False

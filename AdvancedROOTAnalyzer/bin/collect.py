@@ -9,6 +9,17 @@ import ara
 ######################################################################
 # functions
 
+def resubmit(filename, period):
+    global options
+    basedir = ara.config.get('Analysis', 'basedir')
+    myDir = basedir + '/' + options.selection + '/' + period
+    os.chdir(myDir)
+    condor_jobfile = myDir+'/'+filename+"_condor.cfg"
+    ara.wait_for_jobs(options.njobs)
+    print "Resubmitting", condor_jobfile
+    rc = ara.getCommandOutput2("condor_submit " + condor_jobfile)
+    return rc
+
 def check(job, period):
     """Check log files for errors and warnings"""
     global options
@@ -22,18 +33,29 @@ def check(job, period):
     warnings = [ "warning", "wrn" ]
     requirements = [ "End executing" ]
     
-    # List all log files
+    # Find all job files from directory
+    jobfiles = []
     for filename in os.listdir(myDir):
-        if job in filename:
-            if "stdout.log" in filename:
-                success = ara.check_log(myDir+'/'+filename, errors, warnings, requirements)
-                if not success:
-                    return False
-            if "stderr.log" in filename:
-                success = ara.check_log(myDir+'/'+filename, errors, warnings, None)
-                if not success:
-                    return False
-    return True
+        if job in filename and ".cfg" in filename and not "condor" in filename:
+            jobfiles.append(filename[:filename.find(".cfg")])
+
+    # Check all job files
+    good = True
+    for filename in jobfiles:
+        success = ara.check_log(myDir+'/'+filename+"_stdout.log", 
+                                errors, warnings, requirements)
+        if not success:
+            good = False
+            if (options.resubmit):
+                resubmit(filename, period)
+        else:
+            success = ara.check_log(myDir+'/'+filename+"_stderr.log",
+                                    errors, warnings, None)
+            if not success:
+                good = False
+                if (options.resubmit):
+                    resubmit(filename, period)
+    return good
 
 def join(job, period):
     global options
@@ -78,27 +100,27 @@ def rm(job, period):
     print "Removing output file", job + ".root"
     os.system('rm -f ' + myDir + '/' + job + ".root")
 
-def check_join(items, all=True):
-    errors = False
-    for (period, jobs) in items:
-        for job in jobs.split(','):
-            if all or options.job in job:
-                if check(job, period):
-                    if not join(job, period):
-                        errors = True
-                        rm(job, period)
-                else:
-                    errors = True
-                    rm(job, period)
-    return errors
+def check_join(jobgroup, job, period):
+    if not check(job,period):
+        return False
+    if not join(job, period):
+        rm(job, period)
+        return False
+    return True
 
 ######################################################################
 # main
 def main():
     global options
 
-    usage = "usage: %prog [options] selection [job]"
+    usage = """usage: %prog [options] selection [jobgroup] [pattern]
+
+Will check output of CONDOR jobs and join files in given jobgroup matching the
+specified pattern. "jobgroup" defaults to the default job group named
+"default", and "pattern" defaults to "all", i.e. all jobs in the given
+jobgroup will be checked and joined."""
     optParser = optparse.OptionParser(usage)
+    defaultnjobs=20
     optParser.add_option("-c", "--config", dest="cfgfile",
                          help="global configuration file",
                          default=ara.defaultConfigFileName)
@@ -106,9 +128,14 @@ def main():
                          help="Force overwriting of existing .root files",
                          action="store_true",
                          default=False)
+    optParser.add_option("-r", "--resubmit", dest="resubmit", action="store_true",
+                         help="Resubmit failed jobs")
+    optParser.add_option("-n", "--njobs", dest="njobs",
+                         help="how many jobs to run at once if resubmitting",
+                         default=defaultnjobs)
 
     (options, args) = optParser.parse_args()
-    if len(args) < 1 or len(args) > 2:
+    if len(args) < 1 or len(args) > 3:
         optParser.print_help()
         return 1
 
@@ -118,15 +145,28 @@ def main():
         print("You must setup correct ROOTSYS for AdvancedROOTAnalyzer to work")
         return 1
 
-    # setup local arguments
-    options.selection = args[0]
-    if len(args) == 2:
-        options.job = args[1]
-    else:
-        options.job = "default"
+    # get number of jobs
+    try:
+        options.njobs = int(options.njobs)
+    except ValueError:
+        print "Number of jobs has to be a number"
+        return 1
+
+    if options.njobs <= 0:
+        print "Number of jobs must be greater than zero"
+        return 2
 
     # read global configuration file
     ara.config.read(options.cfgfile)
+
+    # setup local arguments
+    options.selection = args[0]
+    options.jobgroup = 'default'
+    options.pattern = 'all'
+    if len(args) >= 2:
+        options.jobgroup = args[1]
+    if len(args) >= 3:
+        options.pattern = args[2]
 
     # Check ROOT version
     rootversion = ara.getCommandOutput2("root-config --version");
@@ -137,30 +177,33 @@ def main():
     if major < 5 or (major == 5 and minor < 32):
         print "You are using to old root version", rootversion
         print "You need to use at least ROOT 5.32.00 for hadd to work correctly"
-        print "All your histograms filled by text strings might be wrong"
-
-    print "Checking and joining job(s):", options.job
+        print "All your histograms filled by text strings will be wrong"
 
     errors = False
     try:
         # check if this is a job group
-        items = ara.config.items('Jobs:'+options.job)
-        # OK, is a job group, check all jobs in job group
-        errors = check_join(items, all=True)
+        section = 'jobgroup:'+options.jobgroup
+        items = ara.config.items(section)
+        # OK, is a job group
+        print "Checking and joining jobs from job group", options.jobgroup
+        for (period, jobs) in items:
+            print "Job group period", period, "consists of jobs", jobs
+            for job in jobs.split(','):
+                if options.pattern in job or options.pattern == 'all':
+                    print "Collecting job", job
+                    errors = check_join(options.jobgroup, job, period) and errors
     except ConfigParser.NoSectionError:
-        # OK, is not a job group, take default group
-        # and check all jobs which contain options.job inside their name 
-        try:
-            items = ara.config.items('Jobs:default')
-            errors = check_join(items, all=False)
-        except ConfigParser.NoSectionError:
-            print "No [Jobs:default] section found in configuration file!"
-            errors = True
+        print section, "is not a job group."
+        print "You must configure job groups in file %s" % ( options.cfgfile )
+        return 1
 
     if errors:
         print "*******************************************************************************"
         print "* There were errors, check script output                                      *" 
         print "*******************************************************************************"
+        return 1
+    
+    return 0
 
 if __name__ == "__main__":
     sys.exit(main())

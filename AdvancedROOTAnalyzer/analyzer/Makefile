@@ -103,7 +103,7 @@ $(DICT).C: $(HEADERS) LinkDef.h
 
 $(CUTFLOW).C: $(SOURCES)
 	@echo "Generating cutflow..."
-	gencutflow.py -f $@ $+
+	../bin/gencutflow.py -f $@ $+
 
 ######################################################################
 # targets

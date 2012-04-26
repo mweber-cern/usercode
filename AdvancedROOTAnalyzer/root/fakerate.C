@@ -3,6 +3,7 @@
 
 using namespace std;
 
+#include "TROOT.h"
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TH3D.h"
@@ -16,6 +17,7 @@ using namespace std;
 
 #include "plot.h"
 #include "stat.h"
+#include "xsection.h"
 
 
 const char * get_bin_edges(const TH1 * histo, Int_t i, Int_t j, Int_t k)
@@ -37,6 +39,160 @@ const char * get_bin_edges(const TH1 * histo, Int_t i, Int_t j)
   return buffer;
 }
 
+TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
+{
+  if (gStart != gEnd) {
+    ERROR("tight_loose_ratio() can only be called for one period!");
+    return 0;
+  }
+  if (draw) {
+    MakeCanvas();
+    // MakeCanvas(2,2);
+  }
+  // "plot" histograms -> put into memory
+  int oldpad = gPadNr;
+  cd(1);
+  INFO("Plotting tight muons");
+  plot3("TightMuons");
+  cd(2);
+  INFO("Plotting loose muons");
+  plot3("LooseMuons");
+  TH3D * hTight3_data = gHisto3[0][gMaxProcess-1];
+  if (hTight3_data == 0) {
+    ERROR("hTight3_data == 0");
+    return 0;
+  }
+  TH3D * hLoose3_data = gHisto3[1][gMaxProcess-1];
+  if (hLoose3_data == 0) {
+    ERROR("hLoose3_data == 0");
+    return 0;
+  }
+  cd(oldpad+1);
+  double nTightBefore = hTight3_data->Integral();
+  double nLooseBefore = hLoose3_data->Integral();
+  double nTightAfter  = nTightBefore;
+  double nLooseAfter  = nLooseBefore;
+  INFO("Statistics before subtraction");
+  INFO("Tight muons: " << nTightBefore << ", loose muons: " << nLooseBefore);
+  // subtract background contribution from data
+  for (Int_t j = 0; j < gMaxProcess-1; j++) {
+    TString proc(gProcess[j].fname);
+    if (proc.Contains("qcd") || proc.Contains("signal") || proc.Contains("background")) {
+      INFO("Skipping " << gProcess[j].fname);
+      continue;
+    }
+    TH3D * hTight3_back = gHisto3[0][j];
+    if (hTight3_back == 0) {
+      ERROR("gHisto[0]["<<j<<"] == 0");
+      continue;
+    }
+    TH3D * hLoose3_back = gHisto3[1][j];
+    if (hLoose3_back == 0) {
+      ERROR("gHisto[1]["<<j<<"] == 0");
+      continue;
+    }
+    double nTight = hTight3_back->Integral();
+    double nLoose = hLoose3_back->Integral();
+    if (nTight != 0 || nLoose != 0) {
+      INFO(gProcess[j].fname << ": subtracting " << nTight << " tight and " 
+	   << nLoose << " loose events");
+    }
+    hTight3_data->Add(hTight3_back, -1.);
+    nTightAfter -= nTight;
+    hLoose3_data->Add(hLoose3_back, -1.);
+    nLooseAfter -= nLoose;
+  }
+  // output some statistics
+  INFO("After subtraction:");
+  INFO("Count: Tight muons: " << nTightAfter << ", loose muons: " << nLooseAfter);
+  INFO("Histo: Tight muons: " << hTight3_data->Integral() 
+       << ", loose muons: " << hLoose3_data->Integral());
+
+  // now work in 2D-Projection
+  TH2D * hTight2 = (TH2D *) hTight3_data->Project3D("yx");
+  TH2D * hLoose2 = (TH2D *) hLoose3_data->Project3D("yx");
+  TH2D * hRatio2 = new TH2D(*hTight2);
+  hRatio2->SetDirectory(0);
+  hRatio2->SetName("hRatio2");
+  hRatio2->SetTitle("Tight/Loose ratio (T/L) (2D)");
+
+  if (draw) {
+    cd(3); hLoose2->Draw("lego2");
+    cd(4); hTight2->Draw("lego2");
+  }
+
+  // divide with binomial errors
+  hRatio2->Divide(hTight2, hLoose2, 1., 1., "B");
+  // some sanity checks
+  for (Int_t i = 1;  i < hRatio2->GetNbinsX()+1; i++) {
+    for (Int_t j = 1; j < hRatio2->GetNbinsY()+1; j++) {
+      Double_t nLoose = hLoose2->GetBinContent(i, j);
+      Double_t nTight = hTight2->GetBinContent(i, j);
+      Double_t nRatio = hRatio2->GetBinContent(i, j);
+      Double_t error  = hRatio2->GetBinError(i, j);
+
+      if (nLoose < nTight || nLoose < 0 || nTight < 0) {
+	ERROR("Numbers are wrong in your histogram");
+	INFO("nLoose(" << get_bin_edges(hRatio2, i, j) << ") " << nLoose);
+	INFO("nTight(" << get_bin_edges(hRatio2, i, j) << ") " << nTight);
+	if (nLoose < 0) {
+	  // hLoose2->SetBinContent(i, j, 0.);
+	  // hTight2->SetBinContent(i, j, TMath::Max(nTight, 0.));
+	}
+	if (nTight < 0) {
+	  // hTight2->SetBinContent(i, j, 0.);
+	}
+      }
+      if (nLoose != 0 && nRatio != nTight/nLoose) {
+	ERROR("ROOT calculation went wrong");
+      }
+      if (nRatio < 0 || nRatio >= 1.) {
+	ERROR("Found unreasonable values for T/L ratio");
+	INFO("T/L (" << get_bin_edges(hRatio2, i, j) << ") " 
+	     << nRatio << " +- " << error);
+      }
+      if (nRatio != 0) {
+	DEBUG("T/L (" << get_bin_edges(hRatio2, i, j) << ") " 
+	      << nRatio << " +- " << error);
+      }
+    }
+  }
+  if (draw) {
+    cd(1);
+    hRatio2->Draw("lego2");
+  }
+
+  // now do the same in 1D-Projection
+  TH1D * hTight1 = (TH1D *) hTight3_data->Project3D("x");
+  TH1D * hLoose1 = (TH1D *) hLoose3_data->Project3D("x");
+  TH1D * hRatio1 = new TH1D(*hTight1);
+  hRatio1->SetDirectory(0);
+  hRatio1->SetName("hRatio1");
+  hRatio1->SetTitle("Tight/Loose ratio (T/L)");
+
+  // divide with binomial errors
+  hRatio1->Divide(hTight1, hLoose1, 1., 1., "B");
+
+  if (save) {
+    const char * fakeRateFileName = "FakeRate.root";
+    TFile * fakeRateFile = new TFile(fakeRateFileName, "RECREATE");
+    if (fakeRateFile == 0 || !fakeRateFile->IsOpen()) {
+      cerr << "ERR: Could not open fake rate file " << fakeRateFileName << endl;
+      return 0;
+    }
+    hRatio1->Write();
+    hRatio2->Write();
+    fakeRateFile->Close();
+    delete fakeRateFile;
+  }
+
+  if (draw) {
+    cd(2);
+    hRatio1->Draw();
+  }
+  return hRatio1;
+}
+
 TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
 {
   if (gStart != gEnd) {
@@ -47,8 +203,16 @@ TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
   if (!f.IsOpen()) {
     return 0;
   }
-  TH3D * hTight3 = (TH3D *) f.Get("h3_TightMuons");
-  TH3D * hLoose3 = (TH3D *) f.Get("h3_LooseMuons");
+  TH3D * hTight3 = (TH3D *) f.Get("h3_0_TightMuons");
+  TH3D * hLoose3 = (TH3D *) f.Get("h3_0_LooseMuons");
+  if (hTight3 == 0) {
+    cerr << "Could not get hTight3"; 
+    return 0;
+  }
+  if (hLoose3 == 0) {
+    cerr << "Could not get hLoose3"; 
+    return 0;
+  }
   TH3D * hRatio3 = new TH3D(*hTight3);
   hRatio3->SetDirectory(0);
   hRatio3->SetName("hRatio3");
@@ -137,7 +301,7 @@ TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
   cd(1);
   hRatio1->Draw("le");
   cd(2);
-  hRatio2->Draw("LEGO");
+  hRatio2->Draw("LEGO2");
   setopt(hRatio2);
   hRatio2->GetXaxis()->SetTitle("#mu p_{T} [GeV]");
   hRatio2->GetYaxis()->SetTitle("#mu #eta");
@@ -150,6 +314,7 @@ TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
       cerr << "ERR: Could not open fake rate file " << fakeRateFileName << endl;
       return 0;
     }
+    hRatio1->Write();
     hRatio2->Write();
     hRatio3->Write();
     fakeRateFile->Close();
@@ -175,12 +340,12 @@ TH1D * get_1d_ratio(TH3D * hTight3, TH3D * hLoose3)
   return hRatio1;
 }
 
-void ratioplot(const char * sele = "tightloose")
+void ratioplot(const char * sele = "tightloose5")
 {
   DEBUG("ratioplot() start");
   MakeCanvas();
-  selection(sele);
-  period("2011");
+  if (sele)
+    selection(sele);
 
   DEBUG("reading histograms");
   // "plot" histograms, i.e. read into memory
@@ -260,33 +425,13 @@ void ratioplot(const char * sele = "tightloose")
       }
     }
   }
+  // add subtracted data histogram
+  TH1D * hdata_subtracted = get_subtracted_tight_loose_ratio(false, false);
+  hdata_subtracted->SetMarkerColor(kBlue);
+  hdata_subtracted->SetMarkerStyle(8);
+  hdata_subtracted->Draw("epsame");
+  leg->AddEntry(hdata_subtracted, "data subtr.", "ep");
   leg->Draw();
-}
-
-void old_ratioplot()
-{
-  selection("tightloose");
-  period("2011");
-
-  // get histograms for each process
-  bool first = true;
-  TLegend * leg = new TLegend(0.7, 0.5, 0.95, 0.95);
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    TH1D * histo = tight_loose_ratio(gProcess[i].fname, false);
-    if (histo == 0)
-      continue;
-    setopt(histo);
-    histo->SetLineColor(gProcess[i].lcolor);
-    histo->SetLineStyle(gProcess[i].lstyle);
-    leg->AddEntry(histo, "l", gProcess[i].fname);
-    if (first) {
-      histo->Draw("histo");
-      first = false;
-    }
-    else {
-      histo->Draw("histosame");
-    }
-  }
 }
 
 void tightlooseplots(const char * sele = "tightloose")
@@ -310,7 +455,7 @@ void tightlooseplots(const char * sele = "tightloose")
 
   // plot 2
   cd(1);
-  plot("nTL_HT");
+  plot("nTL_ht");
   min(0.1);
   logy();
   arrow(200);
@@ -334,7 +479,7 @@ void tightlooseplots(const char * sele = "tightloose")
   legend(1e-3);
 
   cd(2);
-  plot("TL_MT");
+  plot("TL_mt");
   logy();
   min(0.1);
   legend(1e-3);
@@ -354,7 +499,6 @@ void tightlooseplots(const char * sele = "tightloose")
   legend(1e-3);
 
   print("tightloose_4.pdf");  
-
 }
 
 void doublefakeplots(const char * sele = "doublefake")
@@ -385,11 +529,15 @@ void doublefakeplots(const char * sele = "doublefake")
   print("doublefake_3.pdf");
 }
 
-double get_doublefakes()
+TH1D * get_doublefakes(const char * hname)
 {
+  if (gStart != gEnd) {
+    ERROR("Cannot work for more than one period");
+    return 0;
+  }
   MakeCanvas();
-  TFile f("/user/mweber/doublefake/2011/data_doublemu.root");
-  TH1D * hmu = (TH1D *) f.Get("h1_m_mumu");
+  TFile f(Form("%s/%s", getpath(gStart), "data_doublemu.root"));
+  TH1D * hmu = (TH1D *) f.Get(hname);
   hmu->SetDirectory(0);
   setopt(hmu);
   hmu->Rebin(5);
@@ -405,7 +553,7 @@ double get_doublefakes()
   hcut->Draw("ep");
   N = hcut->GetBinContent(12.);
   cout << "Got " << N << " events from cut flow" << endl;
-  return N;
+  return hcut;
 }
 
 const char * stages[] = { 
@@ -449,3 +597,20 @@ void check_all_files()
   }
 }
 
+void lumicorrection()
+{
+  plot("nTL_met");
+  correctfactor("qcd", 0, 100);
+  plot("nTL_met");
+  correctfactor("tt", 130, 500);
+  plot("nTL_met");
+  correctfactor("qcd", 0, 100);
+  plot("nTL_met");
+  correctfactor("dyll", 0, 100);
+  plot("nTL_met");
+  correctfactor("qcd", 0, 100);
+  plot("nTL_met");
+  cd(2);
+  plot("nTL_met");
+  logy();
+}

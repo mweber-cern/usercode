@@ -41,7 +41,9 @@ protected:
   Long64_t  fMaxTreeSize; // maximum tree size (output)
   bool      fFindDuplicates; // find duplicate events?
   bool      fDumpAll;   // Dump all event information
+  bool      fDumpBasic; // Dump basic information
   bool      fDumpTruth; // Dump MC truth information
+  string    fDumpTrigger; // Dump Trigger information
   bool      fSkimActive; // Skimming Active?
   Int_t     fSkimMuons;  // how many muons to require
   Double_t  fSkimMuoptfirst; // cut on muon with highest pt
@@ -120,7 +122,7 @@ protected:
 		  std::vector<UInt_t> * listb = NULL);
   Double_t SumET(const std::vector<TLorentzVector> & objects);
   Double_t MT(const std::vector<TLorentzVector> & objects);
-  bool filterNoise();
+  bool filterHBHENoise();
 
   
   typedef std::pair< pair<int,int> , pair<double,double> > Key;

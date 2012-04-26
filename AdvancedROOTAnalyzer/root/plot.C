@@ -63,6 +63,7 @@ char * strdup_new(const char * text)
 
 void setopt(TStyle * style)
 {
+  style->SetPalette(1);
   style->SetOptTitle(0);          // don't show histogram title
   style->SetPadLeftMargin(0.15);
   return;
@@ -87,8 +88,8 @@ void setopt(TStyle * style)
   style->SetErrorX(0);            // no horizontal error
   style->SetTitleOffset(3, "Y");  // title offset
   style->SetTitleOffset(3, "X");  // title offset
-  style->SetLabelSize(0.03, "Y"); // title offset
-  style->SetLabelSize(0.03, "X"); // title offset
+  style->SetLabelSize(0.03, "Y"); // label size
+  style->SetLabelSize(0.03, "X"); // label size
   style->SetTitleXSize(0.03);     // title size
   style->SetTitleYSize(0.03);     // title size
 }
@@ -445,6 +446,7 @@ void MakeCanvas(Int_t dx, Int_t dy)
   // create analysis canvas with requested subdivisions
   if (gCanvas) {
     delete gCanvas;
+    gCanvas = 0;
   }
 
   // determine x and y sizes
@@ -1669,8 +1671,8 @@ TH1D * addperiod(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    sprintf(histname, "h1_%s", hname);
-    // sprintf(histname, "h1_%i_%s", gStage, hname);
+    // sprintf(histname, "h1_%s", hname);
+    sprintf(histname, "h1_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -1891,8 +1893,8 @@ TH2D * addperiod2(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    sprintf(histname, "h2_%s", hname);
-    // sprintf(histname, "h2_%i_%s", gStage, hname);
+    // sprintf(histname, "h2_%s", hname);
+    sprintf(histname, "h2_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -2035,8 +2037,8 @@ TH3D * addperiod3(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    sprintf(histname, "h3_%s", hname);
-    // sprintf(histname, "h3_%i_%s", gStage, hname);
+    // sprintf(histname, "h3_%s", hname);
+    sprintf(histname, "h3_%i_%s", gStage, hname);
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {

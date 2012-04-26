@@ -161,13 +161,13 @@ class TreeContent {
    Double_t        noise_hcal_TS4TS5NoiseSumEt;
    Int_t           trig_HLTName[20];
    Int_t           trig_n;
-   Int_t           trig_L1prescale[1000];   //[trig_n]
-   Int_t           trig_HLTprescale[1000];   //[trig_n]
-   Int_t           trig_name[1000][20];   //[trig_n]
-   Int_t           trig_filter[1000][20];   //[trig_n]
-   Double_t        trig_pt[1000];   //[trig_n]
-   Double_t        trig_eta[1000];   //[trig_n]
-   Double_t        trig_phi[1000];   //[trig_n]
+   Int_t           trig_L1prescale[7000];   //[trig_n]
+   Int_t           trig_HLTprescale[7000];   //[trig_n]
+   Int_t           trig_name[7000][20];   //[trig_n]
+   Int_t           trig_filter[7000][20];   //[trig_n]
+   Double_t        trig_pt[7000];   //[trig_n]
+   Double_t        trig_eta[7000];   //[trig_n]
+   Double_t        trig_phi[7000];   //[trig_n]
    Int_t           truth_n;
    Int_t           truth_pdgid[100];   //[truth_n]
    Int_t           truth_bvtxid[100];   //[truth_n]

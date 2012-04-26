@@ -20,7 +20,7 @@ const char * stages[] = {
 TH1D * get_cutflow_histogram()
 {
     UInt_t size = sizeof(stages)/sizeof(const TH1D *);
-    TH1D * h = new TH1D("h1_cutflow", "cut flow", size, 0, size);
+    TH1D * h = new TH1D("h1_0_cutflow", "cut flow", size, 0, size);
     // cout << " found " << size << " stages " << endl;
     for (UInt_t i = 0; i < size; i++) {
       // initialize bin

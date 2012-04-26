@@ -89,7 +89,7 @@ void BinnedPoissonianLikelihood(Int_t    & npar,  // # of internal parameters
 }
 
 void xsratio(Double_t xs[4], // xs, parabolic error, -error, +error
-	     Int_t order = 1, Bool_t draw = kFALSE)
+	     Int_t order, Bool_t draw)
 {
   // fit the cross-section ratio (measured/theorie) from global
   // histograms. The input parameter determines the confidence level
@@ -724,7 +724,7 @@ void xsExpectedError(Int_t ntrials)
   delete gFitBackground;
 }
 
-void correctfactor(const char * pname, Double_t xlow, Double_t xup)
+void correctfactor(const char * pname, Double_t xlow, Double_t xup, bool setWeight)
 {
   // determine correction factor gCorrect from current histogram
   if (gStart != gEnd) {
@@ -786,6 +786,10 @@ void correctfactor(const char * pname, Double_t xlow, Double_t xup)
 	   newweight, 
 	   xs[3] * oldweight,
 	   xs[2] * oldweight);
+    if (setWeight) {
+      gProcessInfo[gStart][process].weight = newweight;
+      cout << "Setting weight done!" << endl;
+    }
   }
   
   delete gFitData;

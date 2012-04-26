@@ -60,88 +60,88 @@ void running_lambda_prime_211()
   cout << "Value of lambda'_211 at GUT scale: " << y[nMax-1] << endl;
 }
 
-// Bool_t read_xsfile(const char * name, int nMax, int & n, double m[], double xs_lo[], double xs_nlo[])
-// {
-//   FILE * xsfile = fopen(fname, "r");
-//   if (xsfile == 0) {
-//     ERROR("could not open file " << fname);
-//     return kFALSE;
-//   }
-//   char buffer[256];
-//   int p1, p2;
-//   double mS, Mlr, lambda;
-//   double LO, NLO, k;
-//   double LO_c, NLO_c, k_c;
-//   double LO_tot, NLO_tot;
-//   while (fgets(buffer, 256, xsfile)) {
-//     if (n >= nMax) { 
-//       WARNING("File contains more entries than array - enlarge array");
-//       break;
-//     }
-//     if (buffer[0] == '#')
-//       continue;
-//     if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
-// 	       & p1, & p2,
-// 	       & mS, & Mlr, & lambda,
-// 	       & LO, & NLO, & k,
-// 	       & LO_c, & NLO_c, & k_c,
-// 	       & LO_tot, & NLO_tot) != 13) {
-//       WARNING("Error in format in this line: " << buffer);
-//       continue;
-//     }
-//     xs_lo[n] = LO_tot;
-//     xs_nlo[n] = NLO_tot;
-//     m[n] = mS;
-//     n++;
-//   }
-// }
+Bool_t read_xsfile(const char * name, int nMax, int & n, double m[], double xs_lo[], double xs_nlo[])
+{
+  FILE * xsfile = fopen(fname, "r");
+  if (xsfile == 0) {
+    ERROR("could not open file " << fname);
+    return kFALSE;
+  }
+  char buffer[256];
+  int p1, p2;
+  double mS, Mlr, lambda;
+  double LO, NLO, k;
+  double LO_c, NLO_c, k_c;
+  double LO_tot, NLO_tot;
+  while (fgets(buffer, 256, xsfile)) {
+    if (n >= nMax) { 
+      WARNING("File contains more entries than array - enlarge array");
+      break;
+    }
+    if (buffer[0] == '#')
+      continue;
+    if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
+	       & p1, & p2,
+	       & mS, & Mlr, & lambda,
+	       & LO, & NLO, & k,
+	       & LO_c, & NLO_c, & k_c,
+	       & LO_tot, & NLO_tot) != 13) {
+      WARNING("Error in format in this line: " << buffer);
+      continue;
+    }
+    xs_lo[n] = LO_tot;
+    xs_nlo[n] = NLO_tot;
+    m[n] = mS;
+    n++;
+  }
+}
 
-// void xsection(const char * fname = "scan_14TeV_cs.txt")
-// {
-//   int nMax = 1000;
-//   double m[1000];
-//   double xs_lo[1000];
-//   double xs_nlo[1000];
-//   int n = 0;
-//   double xs_min = 1E9;
-//   double xs_max = 0;
-//   double m_min = 1E9;
-//   double m_max = 0;
-//   char quarks[6] = { 'd', 'u', 's', 'c', 'b', 't' };
-//   ERROR("this cannot work / fix code");
-//   while (false) {
-//     xs_max = TMath::Max(TMath::Max(xs_max, LO_tot), NLO_tot);
-//     xs_min = TMath::Min(TMath::Min(xs_min, LO_tot), NLO_tot);
-//     m_min = TMath::Min(m_min, mS);
-//     m_max = TMath::Max(m_max, mS);
-//   }
-//   INFO("Found " << n << " data points in file " << fname);
-//   MakeCanvas(1,1);
-//   gPad->SetLogy();
-//   TH2F * hframe = new TH2F("hframe", "frame", 1, m_min, m_max, 1, xs_min, xs_max);
-//   setopt(hframe);
-//   hframe->SetXTitle("m(#bf{#tilde{#mu}}) [GeV]");
-//   hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}}) [pb]", quarks[TMath::Abs(p1)-1], quarks[TMath::Abs(p2)-1]));
-//   hframe->Draw();
+void xsection(const char * fname = "scan_14TeV_cs.txt")
+{
+  int nMax = 1000;
+  double m[1000];
+  double xs_lo[1000];
+  double xs_nlo[1000];
+  int n = 0;
+  double xs_min = 1E9;
+  double xs_max = 0;
+  double m_min = 1E9;
+  double m_max = 0;
+  char quarks[6] = { 'd', 'u', 's', 'c', 'b', 't' };
+  ERROR("this cannot work / fix code");
+  while (false) {
+    xs_max = TMath::Max(TMath::Max(xs_max, LO_tot), NLO_tot);
+    xs_min = TMath::Min(TMath::Min(xs_min, LO_tot), NLO_tot);
+    m_min = TMath::Min(m_min, mS);
+    m_max = TMath::Max(m_max, mS);
+  }
+  INFO("Found " << n << " data points in file " << fname);
+  MakeCanvas(1,1);
+  gPad->SetLogy();
+  TH2F * hframe = new TH2F("hframe", "frame", 1, m_min, m_max, 1, xs_min, xs_max);
+  setopt(hframe);
+  hframe->SetXTitle("m(#bf{#tilde{#mu}}) [GeV]");
+  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}}) [pb]", quarks[TMath::Abs(p1)-1], quarks[TMath::Abs(p2)-1]));
+  hframe->Draw();
   
-//   TGraph * gr_lo = new TGraph(n, m, xs_lo);
-//   // setopt(gr_lo);
-//   gr_lo->SetLineColor(kRed);
-//   gr_lo->SetLineStyle(kDashed);
-//   gr_lo->Draw("plsame");
+  TGraph * gr_lo = new TGraph(n, m, xs_lo);
+  // setopt(gr_lo);
+  gr_lo->SetLineColor(kRed);
+  gr_lo->SetLineStyle(kDashed);
+  gr_lo->Draw("plsame");
 
-//   TGraph * gr_nlo = new TGraph(n, m, xs_nlo);
-//   // setopt(gr_nlo);
-//   gr_nlo->SetLineColor(kBlue);
-//   gr_nlo->SetLineStyle(kSolid);
-//   gr_nlo->Draw("plsame");
+  TGraph * gr_nlo = new TGraph(n, m, xs_nlo);
+  // setopt(gr_nlo);
+  gr_nlo->SetLineColor(kBlue);
+  gr_nlo->SetLineStyle(kSolid);
+  gr_nlo->Draw("plsame");
 
-//   TLegend * leg = new TLegend(0.6, 0.76, 0.95, 0.91, Form("#sqrt{s} = 14 TeV, #lambda'_{211} = %.3f", lambda));
-//   setopt(leg);
-//   leg->AddEntry(gr_lo, "LO", "l");
-//   leg->AddEntry(gr_nlo, "NLO", "l");
-//   leg->Draw();
-// }
+  TLegend * leg = new TLegend(0.6, 0.76, 0.95, 0.91, Form("#sqrt{s} = 14 TeV, #lambda'_{211} = %.3f", lambda));
+  setopt(leg);
+  leg->AddEntry(gr_lo, "LO", "l");
+  leg->AddEntry(gr_nlo, "NLO", "l");
+  leg->Draw();
+}
 
 /** Return linear interpolation between points (x0, val0) and (x1, val1) at given x */
 double interpolate_linear(double x0, double val0, double x1, double val1, double x)

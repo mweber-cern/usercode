@@ -65,33 +65,32 @@ void stat(Double_t low, Double_t up)
   // find bins to start and end with
   Int_t start, end;
   findbins(low, up, start, end);
+  Int_t hstart = FindFirstHisto();
+  if (hstart < 0)
+    return;
 
   // total number of data events
-  if (gStack[gPadNr][gMaxProcess-1]) {
-    nData   = gStack[gPadNr][gMaxProcess-1]->Integral(start, end);
+  if (gHisto[gPadNr][gMaxProcess-1]) {
+    nData = gHisto[gPadNr][gMaxProcess-1]->Integral(start, end);
   }
-
-  // total number of mc events
-  Int_t hstart = FindFirstHisto();
-  if ((hstart >= 0) && (hstart < gMaxProcess-1)) {
-    nTotal  = gStack[gPadNr][hstart]->Integral(start, end);
-  }
+  DEBUG("nData = " << nData);
 
   // compute numbers for each mc separately
   for (Int_t i = 0; i < gMaxProcess-1; i++) {
+    // zero out all values
+    nEvents[i] = 0;
+    nExpected[i] = 0;
+    nGene[i] = 0;
+    weight[i] = 0;
+    // check if mc exists
     if (gHisto[gPadNr][i] == 0) {
       // mc does not exist
-      nEvents[i] = 0;
-      nExpected[i] = 0;
-      nGene[i] = 0;
-      weight[i] = 0;
       continue;
     }
     // get integral for this mc
     nEvents[i] = gHisto[gPadNr][i]->Integral(start, end);
+    nTotal += nEvents[i];
     // get expected number from global process information
-    nExpected[i] = 0.;
-    weight[i] = 0.;
     for (Int_t period = gStart; period <= gEnd; period++) {
       // compute expected events
       nExpected[i] += gLumi[period] * gProcessInfo[period][i].xs;
@@ -108,8 +107,8 @@ void stat(Double_t low, Double_t up)
     if (i < gMaxSignal) {
       // add signal events
       nTotSignal += nEvents[i];
-      nTotExpected += nExpected[i];
     }
+    nTotExpected += nExpected[i];
   }
 
   Double_t effi; // efficiency
@@ -208,6 +207,14 @@ void stat(Double_t low, Double_t up)
   delete[] nGene;
   delete[] nEvents;
   delete[] weight;
+}
+
+/** 
+ * Output for each process the efficiency and error on the efficiency
+ */
+void efficiency()
+{
+  
 }
 
 void chi2(Double_t low = 0, Double_t up = 0)
