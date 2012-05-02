@@ -93,16 +93,16 @@ namespace Combinations {
   
         // Fill the list of indices for the n objects and copy to array
         std::stringstream ss1;
-        for ( uint16_t ii = 0; ii < size; ++ii ) { ss1 << ii; }
+        for ( UInt_t ii = 0; ii < size; ++ii ) { ss1 << ii; }
         char cc1[100];
         strcpy( cc1, ss1.str().c_str() );
     
         char cc2[100];
 
-        for ( uint16_t j = 0; j < size/2; ++j) {
+        for ( UInt_t j = 0; j < size/2; ++j) {
             std::stringstream ss2;
-            for ( uint16_t jj = 0; jj < j+1; ++jj) {
-                //for ( uint16_t jj = 0; jj < size/2; ++jj ) { ss2 << jj; }
+            for ( UInt_t jj = 0; jj < j+1; ++jj) {
+                //for ( UInt_t jj = 0; jj < size/2; ++jj ) { ss2 << jj; }
                 ss2 << jj;
             }
             strcpy( cc2, ss2.str().c_str() );
@@ -147,15 +147,15 @@ namespace Combinations {
             ss << " combo1.size()=" << combo1.size() 
                << " combo2.size()=" << combo2.size()
                << std::endl;
-            for ( uint16_t ii = 0; ii < combo_size; ++ii ) { 
+            for ( UInt_t ii = 0; ii < combo_size; ++ii ) { 
                 ss << " combo1[" << ii << "].size()=" << combo1[ii].size()
 	               << ", values=";
-                for ( uint16_t jj = 0; jj < combo1[ii].size(); ++jj ) { 
+                for ( UInt_t jj = 0; jj < combo1[ii].size(); ++jj ) { 
 	                ss << combo1[ii][jj] << ",";
                 }
                 ss << " combo2[" << ii << "].size()=" << combo2[ii].size()
 	               << ", values=";
-                for ( uint16_t jj = 0; jj < combo2[ii].size(); ++jj ) { 
+                for ( UInt_t jj = 0; jj < combo2[ii].size(); ++jj ) { 
 	                ss << combo2[ii][jj] << ",";
                 }
                 ss << std::endl;
