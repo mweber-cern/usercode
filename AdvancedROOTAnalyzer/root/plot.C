@@ -264,7 +264,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
 
   // get number of background MCs
   Int_t N_bg = gConfig->GetValue("N_bg", -1);
-  if (N_bg < 1) {
+  if (N_bg < 0) {
     ERROR("Number of backgrounds N_bg not found in config file or N_bg < 1");
     return;
   }
@@ -272,7 +272,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
 
   // get number of signal MCs
   gMaxSignal = gConfig->GetValue("N_sg", -1);
-  if (gMaxSignal < 1) {
+  if (gMaxSignal < 0) {
     ERROR("Number of signals N_sg not found in config file or N_sg < 1");
     return;
   }
