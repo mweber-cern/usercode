@@ -143,7 +143,7 @@ namespace Combinations {
         {
             std::stringstream ss;
             ss << " size=" << size << std::endl;
-            int combo_size = combo1.size() < combo2.size() ? combo1.size() : combo2.size();
+            UInt_t combo_size = combo1.size() < combo2.size() ? combo1.size() : combo2.size();
             ss << " combo1.size()=" << combo1.size() 
                << " combo2.size()=" << combo2.size()
                << std::endl;
