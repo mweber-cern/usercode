@@ -75,7 +75,7 @@ def submit(jobgroup, job, period):
             filelist = ara.getCommandOutput2('ls ' + " ".join(filespecs))
         
     except ConfigParser.NoSectionError:
-        print "Could not find section %s in main configuration file %s"
+        print "Could not find section %s in main configuration file %s" % ( section , options.cfgfile )
         print "You must create this section and add entries to it"
         return False
 
