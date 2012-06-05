@@ -243,6 +243,7 @@ void chi2(Double_t low = 0, Double_t up = 0)
   // check validation of sample
   if (nlow > 0.1 * ndof)
     printf("WARN: You should use chi2low() to get a more reliable result\n");
+  
 }
 
 void chi2low(Double_t low = 0, Double_t up = 0, Int_t nevents = 100000)

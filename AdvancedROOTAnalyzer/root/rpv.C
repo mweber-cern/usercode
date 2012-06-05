@@ -60,7 +60,9 @@ void running_lambda_prime_211()
   cout << "Value of lambda'_211 at GUT scale: " << y[nMax-1] << endl;
 }
 
-Bool_t read_xsfile(const char * name, int nMax, int & n, double m[], double xs_lo[], double xs_nlo[])
+Bool_t read_xsfile(const char * fname, int nMax, 
+		   int & p1, int & p2, double & lambda, double & sqrts,
+		   int & n, double m[], double xs_lo[], double xs_nlo[])
 {
   FILE * xsfile = fopen(fname, "r");
   if (xsfile == 0) {
@@ -68,25 +70,26 @@ Bool_t read_xsfile(const char * name, int nMax, int & n, double m[], double xs_l
     return kFALSE;
   }
   char buffer[256];
-  int p1, p2;
-  double mS, Mlr, lambda;
+  double mS, Mlr;
   double LO, NLO, k;
   double LO_c, NLO_c, k_c;
   double LO_tot, NLO_tot;
+  n = 0;
   while (fgets(buffer, 256, xsfile)) {
     if (n >= nMax) { 
-      WARNING("File contains more entries than array - enlarge array");
+      cerr << "File contains more entries than array (" << nMax << " - enlarge array" << endl;
       break;
     }
     if (buffer[0] == '#')
       continue;
-    if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
+    if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
 	       & p1, & p2,
+	       & sqrts,
 	       & mS, & Mlr, & lambda,
 	       & LO, & NLO, & k,
 	       & LO_c, & NLO_c, & k_c,
-	       & LO_tot, & NLO_tot) != 13) {
-      WARNING("Error in format in this line: " << buffer);
+	       & LO_tot, & NLO_tot) != 14) {
+      cerr << "Error in format in this line: " << buffer << endl;
       continue;
     }
     xs_lo[n] = LO_tot;
@@ -94,49 +97,62 @@ Bool_t read_xsfile(const char * name, int nMax, int & n, double m[], double xs_l
     m[n] = mS;
     n++;
   }
+  return kTRUE;
 }
 
-void xsection(const char * fname = "scan_14TeV_cs.txt")
+void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
 {
-  int nMax = 1000;
-  double m[1000];
-  double xs_lo[1000];
-  double xs_nlo[1000];
+  int p1, p2;
+  double lambda, sqrts;
+  const int nMax = 1000;
+  double m[nMax];
+  double xs_lo[nMax];
+  double xs_nlo[nMax];
   int n = 0;
   double xs_min = 1E9;
   double xs_max = 0;
   double m_min = 1E9;
   double m_max = 0;
   char quarks[6] = { 'd', 'u', 's', 'c', 'b', 't' };
-  ERROR("this cannot work / fix code");
-  while (false) {
-    xs_max = TMath::Max(TMath::Max(xs_max, LO_tot), NLO_tot);
-    xs_min = TMath::Min(TMath::Min(xs_min, LO_tot), NLO_tot);
-    m_min = TMath::Min(m_min, mS);
-    m_max = TMath::Max(m_max, mS);
+  if (!read_xsfile(fname, nMax, p1, p2, lambda, sqrts, n, m, xs_lo, xs_nlo)) { 
+    cerr << "Could not read file " << fname << endl;
+    return;
   }
-  INFO("Found " << n << " data points in file " << fname);
-  MakeCanvas(1,1);
+  cout << "Found " << n << " data points in file " << fname << endl;
+  for (int i = 0; i < n; i++) {
+    xs_max = TMath::Max(TMath::Max(xs_max, xs_lo[i]), xs_nlo[i]);
+    xs_min = TMath::Min(TMath::Min(xs_min, xs_lo[i]), xs_nlo[i]);
+  
+    m_min = TMath::Min(m_min, m[i]);
+    m_max = TMath::Max(m_max, m[i]);
+  }
+
+  TCanvas * c1 = new TCanvas("c1", "Single slepton Cross-section",
+			     (Int_t) (400*TMath::Sqrt(2.)), 400);
+  setopt(c1);
   gPad->SetLogy();
   TH2F * hframe = new TH2F("hframe", "frame", 1, m_min, m_max, 1, xs_min, xs_max);
   setopt(hframe);
   hframe->SetXTitle("m(#bf{#tilde{#mu}}) [GeV]");
-  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}}) [pb]", quarks[TMath::Abs(p1)-1], quarks[TMath::Abs(p2)-1]));
+  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}}) [pb]", 
+			 quarks[TMath::Abs(p1)-1], quarks[TMath::Abs(p2)-1]));
   hframe->Draw();
   
   TGraph * gr_lo = new TGraph(n, m, xs_lo);
   // setopt(gr_lo);
   gr_lo->SetLineColor(kRed);
   gr_lo->SetLineStyle(kDashed);
-  gr_lo->Draw("plsame");
+  gr_lo->SetLineWidth(3.);
+  gr_lo->Draw("lsame");
 
   TGraph * gr_nlo = new TGraph(n, m, xs_nlo);
   // setopt(gr_nlo);
   gr_nlo->SetLineColor(kBlue);
   gr_nlo->SetLineStyle(kSolid);
-  gr_nlo->Draw("plsame");
+  gr_nlo->SetLineWidth(3.);
+  gr_nlo->Draw("lsame");
 
-  TLegend * leg = new TLegend(0.6, 0.76, 0.95, 0.91, Form("#sqrt{s} = 14 TeV, #lambda'_{211} = %.3f", lambda));
+  TLegend * leg = new TLegend(0.6, 0.76, 0.95, 0.91, Form("#sqrt{s} = %.0f TeV, #lambda'_{211} = %.3f", sqrts/1000., lambda));
   setopt(leg);
   leg->AddEntry(gr_lo, "LO", "l");
   leg->AddEntry(gr_nlo, "NLO", "l");
@@ -352,4 +368,83 @@ void generate_pileup_histogram()
   file->Write();
   file->Close();
   delete file;
+}
+
+/*
+ * Compute best value for smearing of energy resolution by calculating a chi2
+ * for various scaling parameters and choosing those with lowest chi2 value.
+ */
+
+void compute_energy_resolution() 
+{
+  // get histograms from file
+  MakeCanvas(2,2);
+  plot2("pfmet_scaled");
+  TH2D * hData = gHisto2[gMaxProcess-1];
+  if (hData == 0) {
+    cerr << "ERR: no data found" << endl;
+    return;
+  }
+  // Create empty result histogram, one bin for each factor 
+  // take binning from existing data histogram
+  TH1D * hResult = hData->ProjectionY("hResult", 1, 1);
+  hResult->SetTitle("#chi^2");
+  hResult->Reset();
+  // Create empty histogram with same bining as existing histograms
+  TH2D * hBackground = new TH2D(*hData);
+  hBackground->Reset();
+  // add all background MC contributions together, excluding the not stacked ones
+  for (int process = 0; process < gMaxProcess-1; process++) {
+    Int_t i = gOrder[gPadNr][process];
+    TH2D * histo2 = gHisto2[i];
+    if (histo2 == 0) {
+      continue;
+    }
+    if (!gProcess[i].stack) {
+      cout << "INF: not adding " << gProcess[i].fname << endl;
+      continue;
+    }
+    cout << "INF: Adding " << gProcess[i].fname << endl;
+    hBackground->Add(histo2);
+  }
+  // for data, always take scale 0 (first bin)
+  TH1D * pData = hData->ProjectionX("pData_px", 1, 1);
+  INFO("scale factor for data: " << hData->GetYaxis()->GetBinLowEdge(1)+hData->GetYaxis()->GetBinWidth(1)/2.);
+  cd(1);
+  pData->Draw();
+  cd(2);
+
+  Int_t ndof = 0;
+  Int_t nlow = 0;
+  double ChiSquare = 0;
+  // loop over all possible scale factor values
+  for (int biny = 1; biny < hData->GetNbinsY()+1; biny++) {
+    double scale = hData->GetYaxis()->GetBinLowEdge(biny)+hData->GetYaxis()->GetBinWidth(biny)/2.;
+    INFO("current MC scale factor is " << scale);
+    // get 1d background histogram
+    TH1D * pBackground = hBackground->ProjectionX("_px", biny, biny);
+    pBackground->Draw();
+    gPad->Update();
+    // compute chi2 between data and background
+    for (int binx = 1; binx < pData->GetNbinsX()+1; binx++) {
+      // sum of all MC's ( theory )
+      double temp1 = pBackground->GetBinContent(binx);
+
+      // skip empty bins
+      if (temp1 < 1E-3)
+	continue;
+
+      // theorie - data
+      double temp = temp1 - pData->GetBinContent(binx);
+      ChiSquare += temp * temp / temp1;
+      ndof++;
+      // count bins with less than five entries
+      if (temp1 < 5) {
+	nlow++;
+      }
+    }
+    hResult->SetBinContent(biny, ChiSquare);
+  }
+  cd(3);
+  hResult->Draw();
 }
