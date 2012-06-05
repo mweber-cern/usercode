@@ -38,7 +38,7 @@ completely transferred."""
 
     # get file names from Grid storage element
     print "Reading files from grid storage, please be patient..."
-    srmfiles = ara.srmls(args[0], True)
+    srmfiles = ara.uberftpls(args[0], True)
     # get local file names
     print "Reading local file names and stats..."
     filelist = os.listdir(".")

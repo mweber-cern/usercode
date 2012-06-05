@@ -23,7 +23,7 @@ def main():
     ara.config.read(options.cfgfile)
 
     # get file names from Grid storage element
-    srmfiles = ara.srmls(args[0], True)
+    srmfiles = ara.uberftpls(args[0], True)
     # sum up size
     totalsize = 0
     for (size, filename) in srmfiles:
