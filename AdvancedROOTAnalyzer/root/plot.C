@@ -46,7 +46,7 @@ Bool_t          gIsColor = kTRUE;
 TH1D          * gFitSignal = 0;
 TH1D          * gFitBackground = 0;
 TH1D          * gFitData = 0;
-
+Int_t           gVersion = 1;
 
 
 // helper to duplicate existing string with operator new
@@ -405,11 +405,23 @@ void read_xs_and_lumi()
 }
 
 //////////////////////////////////////////////////////////////////////
-// setup routine
+// setup routines
+
+void version(Int_t version)
+{
+  switch (version) {
+    case 0:
+    case 1:
+      break;
+    default:
+      ERROR("Version unknown: " << version);
+  }
+  gVersion = version;
+}
 
 // this function should be called e.g. by your rootlogon.C, before any functions of the
 // plot.C code are called.
-void setup(const char * configFileName = "Overview.cfg")
+void setup(const char * configFileName)
 {
   INFO("Setting up plot macro");
 
@@ -1305,8 +1317,11 @@ void pprint(const char * hname)
 {
   // print current pad in a file "name", substitute current
   // histogram name if no name given
-  if (FindFirstHisto() < 0)
+  if (FindFirstHisto() < 0) {
+    if (hname != 0)
+      gPad->Print(hname);
     return;
+  }
 
   char fpath[256];
   if (hname == 0) {
@@ -1671,8 +1686,12 @@ TH1D * addperiod(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    // sprintf(histname, "h1_%s", hname);
-    sprintf(histname, "h1_%i_%s", gStage, hname);
+    if (gVersion == 0) {
+      sprintf(histname, "h1_%s", hname);
+    }
+    else if (gVersion == 1) {
+      sprintf(histname, "h1_%i_%s", gStage, hname);
+    }
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -1893,8 +1912,12 @@ TH2D * addperiod2(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    // sprintf(histname, "h2_%s", hname);
-    sprintf(histname, "h2_%i_%s", gStage, hname);
+    if (gVersion == 0) {
+      sprintf(histname, "h2_%s", hname);
+    }
+    else if (gVersion == 1) {
+      sprintf(histname, "h2_%i_%s", gStage, hname);
+    }
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
@@ -2037,8 +2060,12 @@ TH3D * addperiod3(Int_t process, const char * hname,
     }
     // get key from file
     char histname[strlen(hname)+4];
-    // sprintf(histname, "h3_%s", hname);
-    sprintf(histname, "h3_%i_%s", gStage, hname);
+    if (gVersion == 0) {
+      sprintf(histname, "h3_%s", hname);
+    }
+    else if (gVersion == 1) {
+      sprintf(histname, "h3_%i_%s", gStage, hname);
+    }
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
     if (key == 0) {
