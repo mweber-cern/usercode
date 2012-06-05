@@ -38,6 +38,9 @@ default: std::cout << "DEBUG: " << message << std::endl; } } }
 //////////////////////////////////////////////////////////////////////
 // global configuration options etc.
 
+// version
+extern Int_t          gVersion;
+
 // global Variable to log errors (1), warnings (2), info (3), debug(4,5,...)
 extern Int_t          gLogLevel;
 
@@ -163,6 +166,8 @@ void print(const char * hname = 0);
 void pprint(const char * hname = 0);
 
 // less often used
+void version(Int_t version);
+void setup(const char * configFileName = "Overview.cfg");
 void MakeCanvas(Int_t dx = 1, Int_t dy = 2);
 void title(const char * title = 0);
 void shiftbin(Int_t nbins);
