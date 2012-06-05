@@ -10,6 +10,7 @@ import ConfigParser
 import subprocess
 import getpass
 import time
+import tempfile
 
 ######################################################################
 # global variables keeping options and configuration
@@ -84,6 +85,39 @@ def srmls(directory, verbose=False):
             offset = offset + 999;
         else:
             foundall = True
+    return files
+
+def uberftpls(directory, verbose=False):
+    (se, path) = getStoragePath(directory)
+    offset = 0
+    files = []
+    if verbose:
+        print 'Listing ', se+path, 'at offset', offset
+    # create temporary file with commands for uberftp
+    commands = """cd %s
+ls
+""" % ( path )
+#    mytempfile = tempfile.TemporaryFile()
+#    mytempfile.write(commands)
+    # call program and record both stderr and stdout
+    p = subprocess.Popen(["uberftp", "grid-ftp"], stdin=subprocess.PIPE, 
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = p.communicate(commands)
+    if len(stderr) > 0:
+        print "Errors found:", stderr
+        sys.exit(1)
+    for line in stdout.splitlines():
+        # split into file size and file name
+        try:
+            size = int(line.split()[4])
+            fname = line.split()[8]
+        except ValueError:
+            continue
+        except IndexError:
+            continue
+        if verbose:
+            print size, fname
+        files.append([size, fname])
     return files
 
 def srmrm(directory, filenames):
