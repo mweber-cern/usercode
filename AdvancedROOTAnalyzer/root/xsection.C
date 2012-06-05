@@ -22,6 +22,8 @@ TH1D * gSign[3][3] = { { 0 }, { 0 }, { 0 } };
 TH1D * gBack[3] = { 0 };
 TH1D * gData[3] = { 0 };
 
+TH1D * gFitSig[3] = { 0 };
+
 void BinnedPoissonianLikelihood(Int_t    & npar,  // # of internal parameters
 				Double_t * grad,  // array of first derivatives
 				Double_t & fval,  // the function value
@@ -349,6 +351,214 @@ void Likelihood_three(Int_t    & npar,  // # of internal parameters
       }
     }
   }
+}
+
+void Likelihood3(Int_t    & npar,  // # of internal parameters
+		 Double_t * grad,  // array of first derivatives
+		 Double_t & fval,  // the function value
+		 Double_t * xvar,  // the input variable values
+		 Int_t      iflag) // status flag
+{
+  // compute negative logarithm of likelihood for binned poissonian data.
+  // Accept three variables for the tree selections: 
+  // They are the relation of the measured ZZ cross-section to the SM
+  // cross-section.
+
+  fval = 1E9; // Always return some value
+
+  if (npar != 3) {
+    ERROR("Likelihood_3 works only with three parameters!");
+  }
+
+  if (iflag == 1) {
+    // Initialization
+    DEBUG("BinnedPoissonianLikelihood() Initialization");
+  } else if (iflag == 2) {
+    // compute gradient of function value fval
+    grad = 0;
+    ERROR("No gradient computation in BinnedPoissonianLikelihood()");
+  } else if (iflag == 3) {
+    // Things to do after fit has finished
+  } else {
+    // initialize local variables
+    Double_t pval; // partial value
+    // compute function value fval
+    fval = 0;
+    // loop over bins
+    for (Int_t i = 1; i <= gFitData->GetNbinsX(); i++) {
+      // evade log(zero)
+      pval = gFitBackground->GetBinContent(i)
+	+ xvar[0] * gFitSig[0]->GetBinContent(i)
+	+ xvar[1] * gFitSig[1]->GetBinContent(i)
+	+ xvar[2] * gFitSig[2]->GetBinContent(i);
+      if (pval > 0) {
+	fval += pval - gFitData->GetBinContent(i) * TMath::Log(pval);
+      }
+      else if (pval < 0)
+	ERROR("log(<0) in Likelihood()");
+    }
+  }
+}
+
+void xsratio3(Double_t xsval[3], Double_t xserrup[3], Double_t xserrlow[3])
+{
+  // fit all three selection cross sections with covariance matrix
+  for (Int_t j = 0; j < 3; j++) {
+    if (gFitSig[j] == 0) {
+      ERROR("global fit histogram gFitSig[" << j << "] is not initialized");
+      return;
+    }
+  }
+  if (gFitBackground == 0) {
+    ERROR("gFitBackground == 0");
+    return;
+  }
+  if (gFitData == 0) {
+    ERROR("gFitData == 0");
+    return;
+  }
+
+  // create new Minuit with a maximum of five parameters
+  if (gMinuit == 0) {
+    INFO("Creating MINUIT with 5 parameters");
+    gMinuit = new TMinuit(5);
+  }
+
+  // we need this function to be evaluated
+  gMinuit->SetFCN(Likelihood3);
+
+  Double_t arglist[10]; // argument list
+  for (Int_t i = 0; i < 10; i++) {
+    arglist[i] = 0;
+  }
+  Int_t ierflg;         // error return code from Minuit
+  // set printout
+  arglist[0] = gLogLevel < 3 ? -1 : 0;
+  DEBUG("Set Printout");
+  gMinuit->mnexcm("SET PRI", arglist, 1, ierflg);
+  if (ierflg) {
+    ERROR("Could not set printout");
+    return;
+  }
+
+  // clear memory
+  DEBUG("Clearing Memory");
+  gMinuit->mnexcm("CLEAR", arglist, 0, ierflg);
+  if (ierflg) {
+    ERROR("Could not clear memory");
+    return;
+  }
+
+  // set error definition for one-sigma deviation in three dimensions
+  gMinuit->SetErrorDef(1.763);
+  gMinuit->SetMaxIterations(500);
+
+  // set strategy
+  DEBUG("Set Strategy");
+  arglist[0] = 2; // very reliable calculation
+  gMinuit->mnexcm("SET STR", arglist, 1, ierflg);
+  if (ierflg) {
+    ERROR("Could not set strategy");
+    return;
+  }
+
+  // tell Minuit about my parameters
+  TString name0 = "r1";
+  // expected error
+  Double_t experror = 1./TMath::Sqrt(gFitData->Integral());
+  Double_t expxs = (gFitData->Integral()-gFitBackground->Integral())/gFitSig[0]->Integral();
+  if (expxs <= 0) {
+    ERROR("zero cross-section expected");
+    expxs = 0.1;
+  }
+  // physical range from 0 to 100
+  gMinuit->mnparm(0, name0, expxs, experror, 0, 100, ierflg);
+  if (ierflg) {
+    ERROR("Could not set parameter");
+    return;
+  }
+  TString name1 = "r2";
+  // physical range from 0 to 100
+  gMinuit->mnparm(1, name1, expxs, experror, 0, 100, ierflg);
+  if (ierflg) {
+    ERROR("Could not set parameter");
+    return;
+  }
+  TString name2 = "r3";
+  // physical range from 0 to 100
+  gMinuit->mnparm(2, name2, expxs, experror, 0, 100, ierflg);
+  if (ierflg) {
+    ERROR("Could not set parameter");
+    return;
+  }
+
+  // initialize data
+  DEBUG("Initializing data");
+  arglist[0] = 1;
+  gMinuit->mnexcm("CALL FCN", arglist, 1, ierflg);
+  if (ierflg) {
+    ERROR("Could not initialize data");
+    return;
+  }
+
+  // now minimize all three
+  DEBUG("Minimize");
+  gMinuit->mnexcm("MINIMIZE", arglist, 0, ierflg);
+  if (ierflg) {
+    ERROR("Minuit MINIMIZE");
+  }
+
+//   DEBUG("Computing errors");
+//   gMinuit->mnexcm("MINOS", arglist, 0, ierflg);
+//   if (ierflg) {
+//     ERROR("computing minos errors");
+// //      return;
+//   }
+
+  // get value
+  DEBUG("Getting value and error");
+  Double_t val[3], error, end1, end2;
+  Int_t ivarbl;
+  gMinuit->mnpout(0, name0, val[0], error, end1, end2, ivarbl);
+  INFO(name0.Data() << ":" 
+       << setw(10) << setprecision(5) << val[0]
+       << " +- " << setw(10) << setprecision(5) << error);
+  gMinuit->mnpout(1, name1, val[1], error, end1, end2, ivarbl);
+  INFO(name1.Data() << ":" 
+       << setw(10) << setprecision(5) << val[1]
+       << " +- " << setw(10) << setprecision(5) << error);
+  gMinuit->mnpout(2, name2, val[2], error, end1, end2, ivarbl);
+  INFO(name2.Data() << ":" 
+       << setw(10) << setprecision(5) << val[2]
+       << " +- " << setw(10) << setprecision(5) << error);
+
+  // getting minos errors
+  DEBUG("Getting minos errors");
+  Double_t eplus, eminus, globcc;
+  gMinuit->mnerrs(0, eplus, eminus, error, globcc);
+  xsval[0] = val[0]; xserrup[0] = eplus; xserrlow[0] = eminus;
+  INFO(name0.Data() << ":" 
+       << setw(10) << setprecision(5) << val[0]
+       << " + " << setw(10) << setprecision(5) << eplus
+       << " - " << setw(10) << setprecision(5) << eminus
+    );
+  DEBUG("global correlation coefficient " << globcc);
+  gMinuit->mnerrs(1, eplus, eminus, error, globcc);
+  xsval[1] = val[1]; xserrup[1] = eplus; xserrlow[1] = eminus;
+  INFO(name1.Data() << ":" 
+       << setw(10) << setprecision(5) << val[1]
+       << " + " << setw(10) << setprecision(5) << eplus
+       << " - " << setw(10) << setprecision(5) << eminus
+    );
+  DEBUG("global correlation coefficient " << globcc);
+  gMinuit->mnerrs(2, eplus, eminus, error, globcc);
+  xsval[2] = val[2]; xserrup[2] = eplus; xserrlow[2] = eminus;
+  INFO(name2.Data() << ":" 
+       << setw(10) << setprecision(5) << val[2]
+       << " + " << setw(10) << setprecision(5) << eplus
+       << " - " << setw(10) << setprecision(5) << eminus
+    );
+  DEBUG("global correlation coefficient " << globcc);
 }
 
 void xsratio_three(Double_t xsval[3], Double_t xserrup[3], Double_t xserrlow[3])
@@ -810,4 +1020,84 @@ void allcorrect(Text_t * hname, Text_t * pname, Double_t xlow, Double_t xup)
     correctfactor(pname, xlow, xup);
   }
   period(gPeriod[oldstart], gPeriod[oldend]);
+}
+
+void getscale()
+{
+  gFitBackground = 0;
+
+  // loop over processes to get "signal" and "background"
+  for (Int_t process = 0; process < gMaxProcess-1; process++) {
+    if (gHisto[gPadNr][process] == 0)
+      continue;
+    TString pn(gProcess[process].fname);
+    if (pn.Contains("dyll")) {
+      cout << "Found signal 0: " << pn << endl;
+      if (gFitSig[0] == 0) {
+	gFitSig[0] = new TH1D(*gHisto[gPadNr][process]);
+      }
+      else {
+	gFitSig[0]->Add(gHisto[gPadNr][process]);
+      }
+    }
+    else if (pn.Contains("qcd")) {
+      cout << "Found signal 1: " << pn << endl;
+      if (gFitSig[1] == 0) {
+	gFitSig[1] = new TH1D(*gHisto[gPadNr][process]);
+      }
+      else {
+	gFitSig[1]->Add(gHisto[gPadNr][process]);
+      }
+    }
+    else if (pn.Contains("ttjets")) {
+      cout << "Found signal 2: " << pn << endl;
+      if (gFitSig[2] == 0) {
+	gFitSig[2] = new TH1D(*gHisto[gPadNr][process]);
+      }
+      else {
+	gFitSig[2]->Add(gHisto[gPadNr][process]);
+      }
+    }
+    else {
+      // INFO("Found background " << pn);
+      if (gFitBackground == 0) {
+	gFitBackground = new TH1D(*gHisto[gPadNr][process]);
+	gFitBackground->SetDirectory(0);
+      }
+      else
+	gFitBackground->Add(gHisto[gPadNr][process]);
+    }
+  }
+  gFitData = new TH1D(*gHisto[gPadNr][gMaxProcess-1]);
+
+  double xsval[3], xserrup[3], xserrlow[3];
+  xsratio3(xsval, xserrup, xserrlow);
+  for (Int_t process = 0; process < gMaxProcess-1; process++) {
+    TString pn(gProcess[process].fname);
+    Int_t index = -1;
+    if (pn.Contains("dyll")) {
+      index = 0;
+    }
+    else if (pn.Contains("qcd")) {
+      index = 1;
+    }
+    else if (pn.Contains("ttjets")) {
+      index = 2;
+    }
+    else
+      continue;
+
+    Double_t oldweight = gProcessInfo[gStart][process].weight;
+    Double_t newweight = xsval[index] * oldweight;
+    printf("Period %s, process %s: old weight = %8.5f, new weight = %8.5f %+8.5f %+8.5f\n",
+	   gPeriod[gStart], gProcess[process].fname,
+	   oldweight, 
+	   newweight, 
+	   xserrup[index] * oldweight,
+	   xserrlow[index] * oldweight);
+    if (true) {
+      gProcessInfo[gStart][process].weight = newweight;
+      cout << "Setting weight done!" << endl;
+    }
+  }
 }
