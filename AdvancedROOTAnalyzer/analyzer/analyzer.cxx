@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 
   // Turn off branches 
   std::vector<string> removeBranches;
-  split(cfgFile.GetValue("RemoveBranches", ""), ',', removeBranches);
+  split(cfgFile.GetValue("RemoveBranches", "None"), ',', removeBranches);
   std::vector<string>::const_iterator str;
   for (str = removeBranches.begin(); str != removeBranches.end(); str++) {
     if (*str == "None" || *str == "none")

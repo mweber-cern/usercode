@@ -26,8 +26,8 @@ protected:
   TTree &   fInputTree;
   TTree &   fOutputTree;
   TEnv  &   fCfgFile;
-  double    fFakeRate[2]; // fake rate for the two muons
-  double    fFakeWeight;  // fake rate weight for one mu fluctutation in doublefake sample
+  Double_t    fFakeRate[2]; // fake rate for the two muons
+  Double_t    fSingleFakeWeight;  // fake rate weight for one mu fluctutation in doublefake sample
   Int_t     fMuoId[2]; // ID's of selected muons
   TLorentzVector fSigMu[2]; // only in case of signal: generated muons
   TLorentzVector fSigJet[2]; // only in case of signal: generated jets
@@ -48,6 +48,20 @@ protected:
   Int_t     fSkimMuons;  // how many muons to require
   Double_t  fSkimMuoptfirst; // cut on muon with highest pt
   Double_t  fSkimMuoptother; // cut on muon with second highest pt
+  Double_t  fLooseMuonRelIso; // relative isolation cut for loose muon
+  Int_t     fFakeRateDimensions; // number of dimensions for fake rate calculation
+
+  // cuts for T/L ratio
+  Double_t fTL_met_max;
+  Double_t fTL_ht_min;
+  Double_t fTL_jetpt_min;
+  Double_t fTL_nloose_min;
+  Double_t fTL_nloose_max;
+  Double_t fTL_zmass_min;
+  Double_t fTL_zmass_max;
+  Double_t fTL_mupt_min;
+  Double_t fTL_jetdphi_min;
+  Double_t fTL_mt_max;
 
   //////////////////////////////////////////////////////////////////////
   // analysis variables
@@ -55,7 +69,6 @@ protected:
   TString * fTrigger;
   TH3D  *   fFakeRateHisto3D;
   TH2D  *   fFakeRateHisto2D;
-  Int_t     fFakeRateDimensions;
   Int_t     fJets;
 
 public:
@@ -75,6 +88,10 @@ protected:
 				  const vector<int> & tight_muons,
 				  const vector<int> & jets,
 				  const double HT);
+  double GetFakeRate(double muopt, double eta, double jetpt);
+  bool filterHBHENoise();
+  void doPFJetSmearing();
+  void doPFJetSmearingCalculation();
 
   // helper functions
   void CreateHistograms();
@@ -93,8 +110,6 @@ protected:
   void Fill(const char * name, double x, double y);
   void Fill(const char * name, double x, double y, double z);
 
-  double GetFakeRate(double muopt, double eta, double jetpt);
-
   // taken over from ACSUSYAna
   void BasicDump(int i);
   void TriggerDump(TString sel);
@@ -109,21 +124,8 @@ protected:
   void EleDump(bool full=1);
   void PFEleDump(bool full=1);
 
-  void doJESandRecalculateMET(TString corr);
-
   bool FindDuplicates(int run, int evt, double x1, double x2);
-  
   Double_t DeltaPhi(double a, double b);
-  Double_t mT(double et1, double phi1, double et2, double phi2);
-
-  Double_t AlphaT(const std::vector<TLorentzVector> & objects);
-  Double_t MinDEt(const std::vector<TLorentzVector> & objects, 
-		  std::vector<UInt_t> * lista = NULL, 
-		  std::vector<UInt_t> * listb = NULL);
-  Double_t SumET(const std::vector<TLorentzVector> & objects);
-  Double_t MT(const std::vector<TLorentzVector> & objects);
-  bool filterHBHENoise();
-
   
   typedef std::pair< pair<int,int> , pair<double,double> > Key;
   typedef std::set<Key> KeySet;

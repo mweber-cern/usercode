@@ -76,6 +76,30 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fSkimMuoptfirst = fCfgFile.GetValue("SkimMuoptfirst", 15.);
   fSkimMuoptother = fCfgFile.GetValue("SkimMuoptother", 7.);
 
+  // cuts for T/L ratio
+  fLooseMuonRelIso = fCfgFile.GetValue("LooseMuonRelIso", 0.4);
+  fTL_met_max = fCfgFile.GetValue("TL_met_max",  50.);
+  fTL_ht_min = fCfgFile.GetValue("TL_ht_min",  50.);
+  fTL_jetpt_min = fCfgFile.GetValue("TL_jetpt_min",  40.);
+  fTL_nloose_min = fCfgFile.GetValue("TL_nloose_min",  0.5);
+  fTL_nloose_max = fCfgFile.GetValue("TL_nloose_max",  1.5);
+  fTL_zmass_min = fCfgFile.GetValue("TL_zmass_min",  71.);
+  fTL_zmass_max = fCfgFile.GetValue("TL_zmass_max",  111.);
+  fTL_mupt_min = fCfgFile.GetValue("TL_mupt_min",  15.);
+  fTL_jetdphi_min = fCfgFile.GetValue("TL_jetdphi_min",  1.0);
+  fTL_mt_max = fCfgFile.GetValue("TL_mt_max",  40.);
+
+  cout << "fTL_met_max: " << fTL_met_max << endl;
+  cout << "fTL_ht_min: " << fTL_ht_min << endl;
+  cout << "fTL_jetpt_min: " << fTL_jetpt_min << endl;
+  cout << "fTL_nloose_min: " << fTL_nloose_min << endl;
+  cout << "fTL_nloose_max: " << fTL_nloose_max << endl;
+  cout << "fTL_zmass_min: " << fTL_zmass_min << endl;
+  cout << "fTL_zmass_max: " << fTL_zmass_max << endl;
+  cout << "fTL_mupt_min: " << fTL_mupt_min << endl;
+  cout << "fTL_jetdphi_min: " << fTL_jetdphi_min << endl;
+  cout << "fTL_mt_max: " << fTL_mt_max << endl;
+
   //////////////////////////////////////////////////////////////////////
   // analysis variables
   fIsSignal = false;
@@ -111,15 +135,15 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   //////////////////////////////////////////////////////////////////////
   // FakeRate
   fFakeRateDimensions = fCfgFile.GetValue("FakeRateDimensions", 2);
-  if (fFakeRateDimensions != 2 && fFakeRateDimensions != 3) {
+  if (fFakeRateDimensions != 2) { // && fFakeRateDimensions != 3) {
     THROW("Wrong number of fake rate dimensions given: " + std::string(fCfgFile.GetValue("FakeRateDimensions", "")));
   }
   if (fAnalysisType == "singlefake" || fAnalysisType == "doublefake") {
     const char * fakeRateFileName = gSystem->ExpandPathName(fCfgFile.GetValue("FakeRateFile", ""));
-    fFakeRateHisto3D = (TH3D *) get_object(fakeRateFileName, "hRatio3");
-    if (fFakeRateHisto3D == 0) {
-      THROW("Could not get tight/loose 3D histogram from file");
-    }
+    // fFakeRateHisto3D = (TH3D *) get_object(fakeRateFileName, "hRatio3");
+    // if (fFakeRateHisto3D == 0) {
+    //   THROW("Could not get tight/loose 3D histogram from file");
+    // }
     fFakeRateHisto2D = (TH2D *) get_object(fakeRateFileName, "hRatio2");
     if (fFakeRateHisto2D == 0) {
       THROW("Could not get tight/loose 2D histogram from file");
@@ -128,7 +152,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   }
   fFakeRate[0] = 0.;
   fFakeRate[1] = 0.;
-  fFakeWeight = 0.;
+  fSingleFakeWeight = 0.;
 }
 
 Analysis::~Analysis()
@@ -451,12 +475,19 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
 
   // global requirements to get more QCD like events
   TCutList QCDCuts(histo, global_weight);
-  QCDCuts.Set("nTL_met", met_et[3] < 50, met_et[3]); // mainly against ttbar, and a bit w->l nu
-  QCDCuts.Set("nTL_ht", HT > 50., HT); // remove Drell-Yan and signal
-  QCDCuts.Set("nTL_jetpt", fJets > 0 ? pfjet_pt[jets[0]] > 40 : false, 
-	      fJets ? pfjet_pt[jets[0]] : 0); // trigger
-  QCDCuts.Set("nTL_nloose", (nMuonsLoose > 0) && (nMuonsLoose < 2), nMuonsLoose); // (for fakes) && (against Drell-Yan)
+  // mainly against ttbar, and a bit w->l nu
+  QCDCuts.Set("nTL_met", met_et[3] < fTL_met_max, met_et[3]); 
+  // remove Drell-Yan and signal
+  QCDCuts.Set("nTL_ht", fTL_ht_min <= HT, HT);
+  // trigger
+  QCDCuts.Set("nTL_jetpt", fJets > 0 ? fTL_jetpt_min <= pfjet_pt[jets[0]]  : false, 
+	      fJets ? pfjet_pt[jets[0]] : 0); 
+  // (for fakes) && (against Drell-Yan)
+  QCDCuts.Set("nTL_nloose", (fTL_nloose_min <= nMuonsLoose) && (nMuonsLoose < fTL_nloose_max), 
+	      nMuonsLoose);
 
+  double MTfalse = 0.;
+  double ST = HT;
   for (Int_t i = 0; i < nMuonsLoose; i++) {
     // muon dependent requirements to get more QCD like events
     Fill("TL_metdphi", DeltaPhi(met_phi[3], muo_phi[loose_muons[i]]));
@@ -467,23 +498,31 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
 
     TLorentzVector mu0(muo_px[loose_muons[i]], muo_py[loose_muons[i]],
 		       muo_pz[loose_muons[i]], muo_E[loose_muons[i]]);
+    ST += muo_pt[loose_muons[i]];
     // find another (very very) loose muon and construct "Z mass" hypothesis
+    double zmass = 0;
     for (Int_t j = 0; j < muo_n; j++) {
       // skip the same muon
       if (j == loose_muons[i])
 	continue;
       TLorentzVector mu1(muo_px[j], muo_py[j], muo_pz[j], muo_E[j]);
-      Fill("TL_zmass", (mu0+mu1).M());
+      double m = (mu0+mu1).M();
+      Fill("TL_zmass", m);
+      zmass = 91.+TMath::Sign(1., m-91.)*TMath::Min(fabs(91.-zmass), fabs(91.-m));
     }
+    QCDCuts.Set("nTL_zmass", zmass < fTL_zmass_min || fTL_zmass_max < zmass, zmass);
     // compute transverse mass of MET and mu (W hypothesis)
-    double phi12 = TMath::Cos(DeltaPhi(met_phi[3], mu0.Phi()));
-    double MT = 2.*(met_et[3] + mu0.Pt())*(1.-phi12);
+    double cos_phi12 = TMath::Cos(DeltaPhi(met_phi[3], mu0.Phi()));
+    MTfalse = 2.*(met_et[3] + mu0.Pt())*(1.-cos_phi12);
+    double MT = TMath::Sqrt(2*met_et[3]*mu0.Pt()*(1.-cos_phi12));
     Fill("TL_mt", MT);
 
+    // muon pt requirement - needed for MC and data comparison
+    QCDCuts.Set("nTL_mupt", fTL_mupt_min <= muo_pt[loose_muons[i]] , muo_pt[loose_muons[i]]);
     // require muons to be on "opposite" side to jet in phi
-    QCDCuts.Set("nTL_jetdphi", dphi > 1.0, dphi);
+    QCDCuts.Set("nTL_jetdphi", fTL_jetdphi_min <= dphi, dphi);
     // reject W->l nu
-    QCDCuts.Set("nTL_mt", MT < 200., MT);
+    QCDCuts.Set("nTL_mt", MT <= fTL_mt_max, MT);
   }
 
   // Fill N-1 cuts
@@ -499,6 +538,8 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   // some more histograms
   Fill("TL_njets", fJets);
   Fill("TL_nmutight", nMuonsTight);
+  Fill("TL_mtfalse", MTfalse);
+  Fill("TL_st", ST);
 
   // fill histograms in order to compute tight/loose ratio
   int i = 0;
@@ -612,6 +653,7 @@ void Analysis::Loop()
     // pileup reweighting
     if (fInputType == "mc" || fInputType == "signal" || fInputType == "background") {
       global_weight *= LumiWeights_.weight3D(pu_num_int[0], pu_num_int[1], pu_num_int[2]);
+      //doPFJetSmearing();
     }
 
     Fill("cutflow", "pileup rew.");
@@ -651,7 +693,7 @@ void Analysis::Loop()
     for (int i = 0; i < trig_n; i++){
       *fTrigger = unpack(trig_name[i]);
       if (fAnalysisType == "standard" || fAnalysisType == "singlefake" ||
-	  fAnalysisType == "doublefake") {
+	  fAnalysisType == "doublefake" || fAnalysisType == "tightloose" ) {
 	// isolated muon triggers - not used
 	// if (fTrigger->Contains("HLT_IsoMu20_v") || fTrigger->Contains("HLT_IsoMu17_v") || fTrigger->Contains("HLT_IsoMu15_v") || fTrigger->Contains("HLT_IsoMu30_eta2p1_v")){
 
@@ -668,15 +710,15 @@ void Analysis::Loop()
 	  }
 	}
       }
-      else if (fAnalysisType == "tightloose") {
-	if (fTrigger->Contains("HLT_Mu8_Jet40")
-	    || fTrigger->Contains("HLT_Mu8")
-	    || fTrigger->Contains("HLT_Mu15")
-	  ) {
-	  rejection = false;
-	  break;
-	}
-      }
+      // else if (fAnalysisType == "tightloose") {
+      // 	if (fTrigger->Contains("HLT_Mu8_Jet40")
+      // 	    || fTrigger->Contains("HLT_Mu8")
+      // 	    || fTrigger->Contains("HLT_Mu15")
+      // 	  ) {
+      // 	  rejection = false;
+      // 	  break;
+      // 	}
+      // }
       else {
 	THROW("unknown fAnalysisType: " + fAnalysisType);
       }
@@ -762,7 +804,7 @@ void Analysis::Loop()
       // A muon might be reconstructed as a PF jet. Therefore take
       // only those PF jets that do not "coincide" with a tight muon
       double Rmin = 1000;
-      for (unsigned int mu = 0; mu < muons.size(); mu++) {
+      for (int mu = 0; mu < nMuon; mu++) {
 	int m = muons[mu];
 	TLorentzVector mu(muo_px[m], muo_py[m], muo_pz[m], muo_E[m]);
 	Rmin = TMath::Min(Rmin, jet.DeltaR(mu));
@@ -784,21 +826,22 @@ void Analysis::Loop()
     // loose and tight muon id - add isolation and trigger matching
     vector <int> loose_muons;
     vector <int> tight_muons;
-    vector <double> muon_dR;
+    vector <double> tight_dR;
+    vector <double> loose_dR;
     for (int i = 0; i < nMuon; i++) {
       // Trigger matching
       Int_t matched = 0;
       for (int k = 0; k < muo_trign[muons[i]]; k++) {
 	*fTrigger = unpack(trig_name[muo_trig[muons[i]][k]]);
-	if (fAnalysisType == "tightloose") {
-	  if (fTrigger->Contains("HLT_Mu8") ||
-	      fTrigger->Contains("HLT_Mu15") ||
-	      fTrigger->Contains("HLT_Mu8_Jet40")
-	    ) {
-	    matched++;
-	  }
-	}
-	else {
+	// if (fAnalysisType == "tightloose") {
+	//   if (fTrigger->Contains("HLT_Mu8") ||
+	//       fTrigger->Contains("HLT_Mu15") ||
+	//       fTrigger->Contains("HLT_Mu8_Jet40")
+	//     ) {
+	//     matched++;
+	//   }
+	// }
+	// else {
 	  if (fTrigger->Contains("HLT_DoubleMu7") ||
 	      fTrigger->Contains("HLT_DoubleMu6") ||
 	      fTrigger->Contains("HLT_Mu13_Mu7_v") ||
@@ -807,7 +850,7 @@ void Analysis::Loop()
 	      fTrigger->Contains("HLT_Mu17_TkMu8_v")) {
 	    matched++;
 	  }
-	}
+	// }
       }
       Fill("nMuon_matched", matched);
       // require this muon to be matched
@@ -839,7 +882,7 @@ void Analysis::Loop()
 	}
       }
       Fill("MJ_rmin", Rmin);
-      if (jet_min > 0 && Rmin < 0.4) {
+      if (jet_min > 0 && Rmin < fLooseMuonRelIso) {
 	Fill("MJ_EF", muo_E[m]/pfjet_E[jets[jet_min]]);
 	Fill("MJ_EE", muo_E[m], pfjet_E[jets[jet_min]]);
 	// use MC to help if there is a signal particle close
@@ -857,12 +900,13 @@ void Analysis::Loop()
       }
 
       Fill("nMuon_relIso", relIso);
-      if (relIso < 0.4) {
+      if (relIso < fLooseMuonRelIso) {
 	loose_muons.push_back(muons[i]);
+	loose_dR.push_back(Rmin);
       }
       if (relIso < 0.15) {
 	tight_muons.push_back(muons[i]);
-	muon_dR.push_back(Rmin);
+	tight_dR.push_back(Rmin);
       }
     }
     Int_t nMuonsLoose = loose_muons.size();
@@ -969,10 +1013,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // fake rate study: tight-to-loose ratio calculation
-    if (fAnalysisType == "tightloose") {
-      TightLooseRatioCalculation(loose_muons, tight_muons, jets, HT);
-      continue;
-    }
+    TightLooseRatioCalculation(loose_muons, tight_muons, jets, HT);
 
     //////////////////////////////////////////////////////////////////////
     // loose muon id
@@ -993,6 +1034,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // two muon requirements
+    vector<double> muon_dR;
     Fill("Muon_nloose", nMuonsLoose);
     Fill("Muon_ntight", nMuonsTight);
     Fill("Muon_loosetight", nMuonsLoose, nMuonsTight);
@@ -1002,7 +1044,9 @@ void Analysis::Loop()
 	continue;
 
       fMuoId[0] = loose_muons[0];
+      muon_dR.push_back(loose_dR[0]);
       fMuoId[1] = loose_muons[1];
+      muon_dR.push_back(loose_dR[1]);
 
       for (int n = 0; n < 2; n++) {
 	int m = fMuoId[n];
@@ -1012,12 +1056,12 @@ void Analysis::Loop()
       }
 
       // weights
-      double w0 = 1.-fFakeRate[0];
-      double w1 = 1.-fFakeRate[1];
+      double w0 = fFakeRate[0]/(1.-fFakeRate[0]);
+      double w1 = fFakeRate[1]/(1.-fFakeRate[1]);
       // to be used for event subtraction in single orthogonal sample
-      fFakeWeight = fFakeRate[0]/w0 + fFakeRate[1]/w1;
+      fSingleFakeWeight = w0 + w1;
       // double orthogonal sample
-      global_weight *= fFakeRate[0]/w0 * fFakeRate[1]/w1;
+      global_weight *= w0 * w1;
       Fill("cutflow", "doublefake");
     }
     else if (fAnalysisType == "singlefake") {
@@ -1026,35 +1070,45 @@ void Analysis::Loop()
 	continue;
 
       fMuoId[0] = tight_muons[0];
+      muon_dR.push_back(tight_dR[0]);
       // find loose muon which is not tight muon
       for (int n = 0; n < nMuonsLoose; n++) {
 	if (loose_muons[n] == tight_muons[0])
 	  continue;
-	fMuoId[1] = n;
+	const Int_t m = loose_muons[n];
+	fMuoId[1] = m;
+	muon_dR.push_back(loose_dR[n]);
       
 	// weighting with T/L ratio
-	int m = fMuoId[n];
 	fFakeRate[0] = GetFakeRate(muo_pt[m], fabs(muo_eta[m]), pfjet_pt[jets[0]]);
+	fFakeRate[1] = -1.;
 	Fill("SF_pt", muo_pt[m]);
 	Fill("SF_eta", fabs(muo_eta[m]));
       }
+      // assert only one loose muon
+      assert(muon_dR.size() == 2);
 
       // swap IDs if necessary (in order to preserve pt ordering)
       if (fMuoId[0] > fMuoId[1]) {
 	int temp = fMuoId[0];
 	fMuoId[0] = fMuoId[1];
 	fMuoId[1] = temp;
+	double temp2 = muon_dR[0];
+	muon_dR[0] = muon_dR[1];
+	muon_dR[1] = temp2;
       }
       // event weight
       global_weight *= fFakeRate[0]/(1-fFakeRate[0]);
       Fill("cutflow", "singlefake");
     }
-    else if (fAnalysisType == "standard") {
+    else if (fAnalysisType == "standard" || fAnalysisType == "tightloose") {
       if (nMuonsTight != 2) {
 	continue;
       }
       fMuoId[0] = tight_muons[0];
+      muon_dR.push_back(tight_dR[0]);
       fMuoId[1] = tight_muons[1];
+      muon_dR.push_back(tight_dR[1]);
       Fill("cutflow", "standard");
     }
     else { 
@@ -1078,13 +1132,16 @@ void Analysis::Loop()
     }
     Fill("cutflow", "muonID");
 
+    Fill("pfmet_old", met_et[3]);
+    // jet smearing calculation
+    doPFJetSmearingCalculation();
     Fill("pfmet", met_et[3]);
+
     /// Particle flow MET
     if (met_et[3] >= 50.) {
       continue;
     }
     Fill("cutflow", "met");
-
     TLorentzVector mu0(muo_px[fMuoId[0]], muo_py[fMuoId[0]],
 		       muo_pz[fMuoId[0]], muo_E[fMuoId[0]]);
     TLorentzVector mu1(muo_px[fMuoId[1]], muo_py[fMuoId[1]],
@@ -1092,7 +1149,7 @@ void Analysis::Loop()
 
     // needed because no MC for m(mu,mu) < 10. GeV
     double m_mumu = (mu0+mu1).M();
-    /// M(mu, mu)
+    // M(mu, mu)
     if (m_mumu < 15.) {
       continue;
     }
@@ -1133,13 +1190,16 @@ void Analysis::Loop()
     Fill("cutflow", "charge");
 
     Fill("m_mumu", m_mumu);
+    Fill("m_gaugino", gaugino.M());
+    Fill("m_smuon", (mu0+gaugino).M());
     Fill("muo_n", muo_n);
     FillNoWeight("log_weight", TMath::Log(global_weight)/TMath::Log(10.));
 
     //////////////////////////////////////////////////////////////////////
     // fill output tree
-    if (fFill)
+    if (fFill) {
       fOutputTree.Fill();
+    }
   }
 }
 
@@ -1214,6 +1274,11 @@ void Analysis::CreateHistograms()
   CreateHisto("Sig_LostMuPtEta", "Lost muons p_{T}@GeV:Lost muons #eta_{#mu}",
 	      50, 0, 100, 50, -5, 5);
 
+  // PF met rescaling for MC
+  CreateHisto("pfmet_scaled", "scale factor f:PFMET@GeV", 500, 0, 500, 53, -0.0025, 0.2625); 
+  CreateHisto("JER_deltae", "true jet E - reco jet E", 100, -50, 50);
+  CreateHisto("JER_scale", "(true jet E - reco jet E)/true jet E", 100, -2, 2);
+
   // Reskimming
   CreateHisto("bSkim_muo_n", "Number of muons", 10, -0.5, 9.5);
   CreateHisto("bSkim_muo_pt0", "pt of leading muon", 500, 0, 500);
@@ -1281,7 +1346,21 @@ void Analysis::CreateHistograms()
   // event cleaning
   CreateHisto("noise_ecal_r9", "noise_ecal_r9", 100, 0, 1);
   CreateHisto("nElectron", "number of electrons", 10, 0, 10);
+
   CreateHisto("HBHE_Noise", "HBHE noise filter result", 2, 0, 2);
+  CreateHisto("noise_hcal_minE2Over10TS", "noise_hcal_minE2Over10TS", 2, 0, 2);
+  CreateHisto("noise_hcal_maxE2Over10TS", "noise_hcal_maxE2Over10TS", 2, 0, 2);
+  CreateHisto("noise_hcal_maxHPDHits", "noise_hcal_maxHPDHits", 2, 0, 2);
+  CreateHisto("noise_hcal_maxRBXHits", "noise_hcal_maxRBXHits", 2, 0, 2);
+  CreateHisto("noise_hcal_maxHPDNoOtherHits", "noise_hcal_maxHPDNoOtherHits", 2, 0, 2);
+  CreateHisto("noise_hcal_maxZeros", "noise_hcal_maxZeros", 2, 0, 2);
+  CreateHisto("noise_hcal_min25GeVHitTime", "noise_hcal_min25GeVHitTime", 2, 0, 2);
+  CreateHisto("noise_hcal_max25GeVHitTime", "noise_hcal_max25GeVHitTime", 2, 0, 2);
+  CreateHisto("noise_hcal_minRBXEMF", "noise_hcal_minRBXEMF", 2, 0, 2);
+  CreateHisto("noise_hcal_numIsolatedNoiseChannels", "noise_hcal_numIsolatedNoiseChannels", 2, 0, 2);
+  CreateHisto("noise_hcal_isolatedNoiseSumE", "noise_hcal_isolatedNoiseSumE", 2, 0, 2);
+  CreateHisto("noise_hcal_isolatedNoiseSumEt", "noise_hcal_isolatedNoiseSumEt", 2, 0, 2);
+  CreateHisto("noise_hcal_HasBadRBXTS4TS5", "noise_hcal_HasBadRBXTS4TS5", 2, 0, 2);
 
   // Tight-to-loose ratio
   CreateHisto("TightMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV", 
@@ -1292,9 +1371,11 @@ void Analysis::CreateHistograms()
   CreateHisto("nTL_met", "MET@GeV", 100, 0, 500);
   CreateHisto("nTL_jetpt", "leading jet pt@GeV", 150, 0, 1500);
   CreateHisto("nTL_ht", "event HT@GeV", 150, 0, 1500);
-  CreateHisto("nTL_nloose", "number of loose muons", 5, 0, 5);
+  CreateHisto("nTL_nloose", "number of loose muons", 5, -0.5, 4.5);
+  CreateHisto("nTL_mupt", "muon p_{T}@GeV", 100, 0, 100.);
   CreateHisto("nTL_jetdphi", "#Delta#phi between leading jet and loose muon", 315, 0, 3.15);
   CreateHisto("nTL_mt", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
+  CreateHisto("nTL_zmass", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
 
   CreateHisto("TL_met", "MET@GeV", 100, 0, 500);
   CreateHisto("TL_metsig", "MET significance", 100, 0, 50);
@@ -1305,6 +1386,8 @@ void Analysis::CreateHistograms()
   CreateHisto("TL_nloose", "number of loose muons", 5, 0, 5);
   CreateHisto("TL_zmass", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
   CreateHisto("TL_mt", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
+  CreateHisto("TL_mtfalse", "false MT(#mu, MET)@GeV", 500, 0, 500);
+  CreateHisto("TL_st", "event ST@GeV", 100, 0, 1000);
   CreateHisto("TL_njets", "number of jets", 10, -0.5, 9.5);
   CreateHisto("TL_nmutight", "number of tight muons", 5, -0.5, 4.5);
 
@@ -1323,6 +1406,7 @@ void Analysis::CreateHistograms()
   CreateHisto("Jet_pt0", "jet p_{T}:jet p_{T}@GeV", 1000, 0, 1000);
   CreateHisto("Jet_pt1", "jet p_{T}:jet p_{T}@GeV", 1000, 0, 1000);
   CreateHisto("Jet_pt", "jet p_{T}:jet p_{T}@GeV", 20, 0, 100, 20, 0, 100);
+  CreateHisto("pfmet_old", "Particle flow MET (before smearing)@GeV", 1000, 0, 1000);
   CreateHisto("pfmet", "Particle flow MET@GeV", 1000, 0, 1000);
   CreateHisto("Muon_charge", "muon charge:muon charge", 3, -1.5, 1.5, 3, -1.5, 1.5);
   CreateHisto("Muon_ch", "muon charge:muon charge", 2, -1.5, 0.5);
@@ -1331,7 +1415,9 @@ void Analysis::CreateHistograms()
   CreateHisto("DeltaPhi", "#Delta#phi(#mu_{1}, gaugino)", 315, 0., 3.15);
   CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
   CreateHisto("muo_n_cut", "Number of muons", 30, 0, 30);
-  CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
+  CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 100, 0, 500);
+  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
+  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 1000);
   CreateHisto("muo_n", "Number of muons", 30, 0, 30);
   CreateHisto("ht", "HT@GeV", 100, 0, 500);
 
@@ -1380,7 +1466,7 @@ void Analysis::SetBranchAddresses()
 void Analysis::CreateBranches()
 {
   fOutputTree.Branch("fFakeRate", & fFakeRate, "fFakeRate[2]/D");
-  fOutputTree.Branch("fFakeWeight", & fFakeWeight, "fFakeWeight/D");
+  fOutputTree.Branch("fSingleFakeWeight", & fSingleFakeWeight, "fSingleFakeWeight/D");
   fOutputTree.Branch("fMuoId", & fMuoId, "fMuoId[2]/I");
   fOutputTree.Branch("fSigMu", & fSigMu, "fSigMu[2]/I");
   fOutputTree.Branch("fSigJet", & fSigJet, "fSigJet[2]/I");
@@ -1454,7 +1540,16 @@ void Analysis::Fill(const char * name, double x, double y, double z)
 
 double Analysis::GetFakeRate(double muopt, double eta, double jetpt)
 {
-  double fakeRate = 0.;
+  double fakeRate = 0.25;
+  // check valid input
+  if (muopt < 15 || muopt > 70) {
+    WARNING("Analysis::GetFakeRate(): muopt = " << muopt << " out of range");
+    return fakeRate;
+  }
+  if (fabs(eta) > 2.5) {
+    WARNING("Analysis::GetFakeRate(): eta = " << eta << " out of range");
+    return fakeRate;
+  }
   if (fFakeRateDimensions == 3) {
     Int_t bin = fFakeRateHisto3D->FindFixBin(muopt, fabs(eta), jetpt);
     fakeRate = fFakeRateHisto3D->GetBinContent(bin);
@@ -1484,189 +1579,6 @@ Double_t Analysis::DeltaPhi(double a, double b) {
     return  2.*TMath::Pi() - temp;
 }
 
-Double_t Analysis::mT(double et1, double phi1, double et2, double phi2) {
-
-  double mm = 2 * et1 * et2 * ( 1. - cos(phi1 - phi2) );
-  return sqrt(mm);
-
-}
-
-Double_t Analysis::MinDEt(const std::vector<TLorentzVector> & objects,
-			 std::vector<UInt_t> * lista,
-			 std::vector<UInt_t> * listb) {
-
-  // Find the combination with the lowest DEt
-  UInt_t n = objects.size();
-  if (n==0) return 0.;
-  if (n==1) return objects[0].Et();
-  if (n>10)  {
-    cout << "MinDEt: n too big : " << n << endl;
-    return -1;
-  }
-  if (lista!=0 && listb!=0) { lista->clear(); listb->clear(); }
-
-  double mindiff = 1000000000., diff = 0.;
-
-  // Determine the combination that minimises the difference
-  std::vector< std::vector<UInt_t> > combinationset1;
-  std::vector< std::vector<UInt_t> > combinationset2;
-  Combinations::mycombinations(n, combinationset1, combinationset2);
-
-  if (combinationset1.size() != combinationset2.size() ) {
-    cout << "MinDEt: Combination set sizes to not match - something has gone wrong..." << endl;
-  }
-
-  for (UInt_t set = 0; set<combinationset1.size(); set++) {
-
-    std::vector<UInt_t> la = combinationset1[set]; //!< Temporary list a for calculating best combo
-    std::vector<UInt_t> lb = combinationset2[set]; //!< Temporary list b for calculating best combo
-
-    Double_t aEt = 0., bEt = 0.;
-    for (std::vector<UInt_t>::iterator ia=la.begin();ia!=la.end();++ia) {
-      //      cout << (*ia) << " ";
-      aEt += objects[ (*ia) ].Et();
-    }
-    //    cout << ", ";
-    for (std::vector<UInt_t>::iterator ib=lb.begin();ib!=lb.end();++ib) {
-      bEt += objects[ (*ib) ].Et();
-      //      cout << (*ib) << " ";
-    }
-    //    cout << endl;
-    diff = fabs(aEt - bEt);
-    //    cout << "Difference in Et is " << diff << endl;
-    if (diff < mindiff) {
-      mindiff = diff;
-      if (lista!=0 && listb!=0) { *lista = la; *listb = lb; }
-    }
-    la.clear(); lb.clear();
-
-  } // end of loop over combination sets
-
-  //  cout << "Minimum difference is " << mindiff << endl << endl << endl;
-  //  cout << "===========================================" << endl;
-
-  return mindiff;
-}
-
-Double_t Analysis::AlphaT(const std::vector<TLorentzVector> & objects) {
-
-  return 0.5*((SumET(objects) - MinDEt(objects))/(MT(objects)));
-
-}
-
-Double_t Analysis::SumET(const std::vector<TLorentzVector> & objects) {
-
-  Double_t sEt = 0;
-  for (std::vector<TLorentzVector>::const_iterator o=objects.begin();o!=objects.end();++o) {
-    sEt+=o->Et();
-  }
-  return sEt;
-
-}
-
-Double_t Analysis::MT(const std::vector<TLorentzVector> & objects) {
-
-  Double_t sEt = 0, sPx = 0, sPy = 0;
-  for (std::vector<TLorentzVector>::const_iterator o=objects.begin();o!=objects.end();++o) {
-    sEt+=o->Et();sPx+=o->Px();sPy+=o->Py();
-  }
-  Double_t MTsq = sEt*sEt - sPx*sPx - sPy*sPy;
-  return MTsq >= 0. ? sqrt(MTsq) : -sqrt(-MTsq);
-
-}
-
-// JES variation: recalculate Jets and propagate into MET
-void Analysis::doJESandRecalculateMET(TString corr) {
-
-  // WARNING : Not propagated into TCMET since this need track corrected Jets
-  Double_t caloscale;
-  Double_t pfscale;
-
-  Double_t dMEx;
-  Double_t dMEy;
-  Double_t dSumEt;
-
-  // JME-10-010-pas-v8.pdf
-  if (corr == "none")
-    return;
-  else if (corr == "up") {
-    caloscale = 1.04;
-    pfscale   = 1.04;
-  }
-  else if (corr == "down") {
-    caloscale = 0.96;
-    pfscale   = 0.96;
-  }
-  else {
-    cout << "Analysis::doJESandRecalculateMET: Option '" << corr << "' not known." << endl;
-    cout << "                                 No correction applied." << endl;
-    return;
-  }
-  LOG(4, "Analysis::doJESandRecalculateMET called with option '" << corr << "'");
-
-  dMEx   = 0.;
-  dMEy   = 0.;
-  dSumEt = 0.;
-
-  // Calo Jets
-  for (int i=0; i<calojet_n; i++) {
-
-    // not final, best guess
-    if (calojet_pt_raw[i]>20. && calojet_fem[i]<0.9) {
-      dMEx   += (caloscale - 1.) * calojet_px[i];
-      dMEy   += (caloscale - 1.) * calojet_py[i];
-      dSumEt += (caloscale - 1.) * calojet_Et[i];
-    }
-    calojet_E[i]  *= caloscale;
-    calojet_Et[i] *= caloscale;
-    calojet_p[i]  *= caloscale;
-    calojet_pt[i] *= caloscale;
-    calojet_px[i] *= caloscale;
-    calojet_py[i] *= caloscale;
-    calojet_pz[i] *= caloscale;
-  }
-
-  met_sumet[0] += dSumEt;
-  met_ex[0]    -= dMEx;
-  met_ey[0]    -= dMEy;
-
-  TVector3 mcalo(met_ex[0], met_ey[0], 0.);
-
-  met_phi[0] = mcalo.Phi();
-  met_et[0]  = mcalo.Perp();
-
-  // PF Jets
-  dMEx   = 0.;
-  dMEy   = 0.;
-  dSumEt = 0.;
-
-  for (int i=0; i<pfjet_n; i++) {
-
-    // cleaned PF jets, have ptraw > 10 GeV
-    dMEx   += (pfscale - 1.) * pfjet_px[i];
-    dMEy   += (pfscale - 1.) * pfjet_py[i];
-    dSumEt += (pfscale - 1.) * pfjet_Et[i];
-
-    pfjet_E[i]  *= pfscale;
-    pfjet_Et[i] *= pfscale;
-    pfjet_p[i]  *= pfscale;
-    pfjet_pt[i] *= pfscale;
-    pfjet_px[i] *= pfscale;
-    pfjet_py[i] *= pfscale;
-    pfjet_pz[i] *= pfscale;
-  }
-
-  met_sumet[3] += dSumEt;
-  met_ex[3]    -= dMEx;
-  met_ey[3]    -= dMEy;
-
-  TVector3 mpf(met_ex[3], met_ey[3], 0.);
-
-  met_phi[3] = mpf.Phi();
-  met_et[3]  = mpf.Perp();
-
-}
-
 /*
  * Return true if event has no anomalous HBHE noise. This function mimicks the
  * HBHENoiseFilterResultProducer which can be found on
@@ -1694,31 +1606,189 @@ bool Analysis::filterHBHENoise()
   Double_t minIsolatedNoiseSumE = 9999;
   Double_t minIsolatedNoiseSumEt = 9999;
 
-  if (noise_hcal_minE2Over10TS < minRatio)
+  if (noise_hcal_minE2Over10TS < minRatio) {
     result = false;
-  if (noise_hcal_maxE2Over10TS > maxRatio)
+    Fill("noise_hcal_minE2Over10TS", 0.);
+  }
+  else {
+    Fill("noise_hcal_minE2Over10TS", 1.);
+  }
+  if (noise_hcal_maxE2Over10TS > maxRatio) {
     result = false;
-  if (noise_hcal_maxHPDHits >= minHPDHits)
+    Fill("noise_hcal_maxE2Over10TS", 0.);
+  }
+  else {
+    Fill("noise_hcal_maxE2Over10TS", 1.);
+  }
+  if (noise_hcal_maxHPDHits >= minHPDHits) {
     result = false;
-  if (noise_hcal_maxRBXHits >= minRBXHits)
+    Fill("noise_hcal_maxHPDHits", 0.);
+  }
+  else {
+    Fill("noise_hcal_maxHPDHits", 1.);
+  }
+  if (noise_hcal_maxRBXHits >= minRBXHits) {
     result = false;
-  if (noise_hcal_maxHPDNoOtherHits >= minHPDNoOtherHits)
+    Fill("noise_hcal_maxRBXHits", 0.);
+  }
+  else {
+    Fill("noise_hcal_maxRBXHits", 1.);
+  }
+  if (noise_hcal_maxHPDNoOtherHits >= minHPDNoOtherHits) {
     result = false;
-  if (noise_hcal_maxZeros >= minZeros)
+    Fill("noise_hcal_maxHPDNoOtherHits", 0.);
+  }
+  else {
+    Fill("noise_hcal_maxHPDNoOtherHits", 1.);
+  }
+  if (noise_hcal_maxZeros >= minZeros) {
     result = false;
-  if (noise_hcal_min25GeVHitTime < minHighEHitTime)
+    Fill("noise_hcal_maxZeros", 0.);
+  }
+  else {
+    Fill("noise_hcal_maxZeros", 1.);
+  }
+  if (noise_hcal_min25GeVHitTime < minHighEHitTime) {
     result = false;
-  if (noise_hcal_max25GeVHitTime > maxHighEHitTime)
+    Fill("noise_hcal_min25GeVHitTime", 0.);
+  }
+  else {
+    Fill("noise_hcal_min25GeVHitTime", 1.);
+  }
+  if (noise_hcal_max25GeVHitTime > maxHighEHitTime) {
     result = false;
-  if (noise_hcal_minRBXEMF < maxRBXEMF)
+    Fill("noise_hcal_max25GeVHitTime", 0.);
+  }
+  else {
+    Fill("noise_hcal_max25GeVHitTime", 1.);
+  }
+  if (noise_hcal_minRBXEMF < maxRBXEMF) {
     result = false;
-  if (noise_hcal_numIsolatedNoiseChannels >= minNumIsolatedNoiseChannels)
+    Fill("noise_hcal_minRBXEMF", 0.);
+  }
+  else {
+    Fill("noise_hcal_minRBXEMF", 1.);
+  }
+  if (noise_hcal_numIsolatedNoiseChannels >= minNumIsolatedNoiseChannels) {
     result = false;
-  if (noise_hcal_isolatedNoiseSumE >= minIsolatedNoiseSumE)
+    Fill("noise_hcal_numIsolatedNoiseChannels", 0.);
+  }
+  else {
+    Fill("noise_hcal_numIsolatedNoiseChannels", 1.);
+  }
+  if (noise_hcal_isolatedNoiseSumE >= minIsolatedNoiseSumE) {
     result = false;
-  if (noise_hcal_isolatedNoiseSumEt >= minIsolatedNoiseSumEt)
+    Fill("noise_hcal_isolatedNoiseSumE", 0.);
+  }
+  else {
+    Fill("noise_hcal_isolatedNoiseSumE", 1.);
+  }
+  if (noise_hcal_isolatedNoiseSumEt >= minIsolatedNoiseSumEt) {
     result = false;
-  if (noise_hcal_HasBadRBXTS4TS5 == 1)
+    Fill("noise_hcal_isolatedNoiseSumEt", 0.);
+  }
+  else {
+    Fill("noise_hcal_isolatedNoiseSumEt", 1.);
+  }
+  if (noise_hcal_HasBadRBXTS4TS5 == 1) {
     result = false;
+    Fill("noise_hcal_HasBadRBXTS4TS5", 0.);
+  }
+  else {
+    Fill("noise_hcal_HasBadRBXTS4TS5", 1.);
+  }
   return result;
+}
+
+// Jet smearing: match jets to GenJets and smear them. Propagate into MET
+void Analysis::doPFJetSmearing() {
+  double f = 0.21;
+  
+  for (int j = 0; j < pfjet_n; j++) {
+    // correct only jets with pT > 15 GeV
+    if (pfjet_pt[j] > 15.) {
+      // match to generated jet
+      // int truth_jet = -1;
+      double sum_truth = 0;
+      for (int t = 0; t < truthjet_n; t++) {
+        double dR = sqrt(pow(pfjet_eta[j]-truthjet_eta[t], 2) +
+			 pow(DeltaPhi(pfjet_phi[j],truthjet_phi[t]), 2));
+        if (dR < 0.5) {
+	  // if (dpT > 0)
+	  //   WARNING("Analysis::doPFJetSmearing() found more than one matching truth jet");
+	  sum_truth += truthjet_pt[t];
+	  // truth_jet = t;
+        }
+      }
+      if (sum_truth == 0) {
+	// no truth jets found
+      }
+      else {
+	double dpT = pfjet_pt[j] - sum_truth;
+      // if (truth_jet != pfjet_truth[j])
+      // 	WARNING("Calculated true jet: " << truth_jet << ", from SUSYAna: " << pfjet_truth[j]);
+	double ratio = (pfjet_pt[j] + f * dpT) / pfjet_pt[j];
+
+	// correct MET
+	met_ex[3]   -= pfjet_px[j] * (ratio - 1.);
+	met_ey[3]   -= pfjet_py[j] * (ratio - 1.);
+      
+	// correct PF jets
+	pfjet_E[j]  *= ratio;
+	pfjet_Et[j] *= ratio;
+	pfjet_p[j]  *= ratio;
+	pfjet_pt[j] *= ratio;
+	pfjet_px[j] *= ratio;
+	pfjet_py[j] *= ratio;
+	pfjet_pz[j] *= ratio;
+      }
+    }
+  }
+  TVector3 mpf(met_ex[3], met_ey[3], 0.);
+  met_phi[3] = mpf.Phi();
+  met_et[3]  = mpf.Perp();
+}
+
+void Analysis::doPFJetSmearingCalculation() {
+  double mymet_x = met_ex[3];
+  double mymet_y = met_ey[3];
+  for (double f = 0; f < 0.26; f+= 0.005) {
+    for (int j = 0; j < pfjet_n; j++) {
+      // correct only jets with pT > 15 GeV
+      if (pfjet_E[j] > 15.) {
+	// match to generated jet
+	// int truth_jet = -1;
+	double sum_truth = 0;
+	for (int t = 0; t < truthjet_n; t++) {
+	  double dR = sqrt(pow(pfjet_eta[j]-truthjet_eta[t], 2) +
+			   pow(DeltaPhi(pfjet_phi[j],truthjet_phi[t]), 2));
+	  if (dR < 0.5) {
+	  // if (dpT > 0)
+	  //   WARNING("Analysis::doPFJetSmearing() found more than one matching truth jet");
+	    sum_truth += truthjet_E[t];
+	    // truth_jet = t;
+	  }
+	}
+	if (sum_truth == 0) {
+	  // no truth jets found
+	}
+	else {
+	  double dE = pfjet_E[j] - sum_truth;
+	  // if (truth_jet != pfjet_truth[j])
+	  // 	WARNING("Calculated true jet: " << truth_jet << ", from SUSYAna: " << pfjet_truth[j]);
+	  double scale = dE/pfjet_E[j];
+	  Fill("JER_deltae", dE);
+	  Fill("JER_scale", scale);
+
+	  // correct MET
+	  mymet_x -= pfjet_px[j] * f * scale;
+	  mymet_y -= pfjet_py[j] * f * scale;
+	}
+      }
+    }
+    TVector3 mpf(mymet_x, mymet_y, 0.);
+    double met = mpf.Perp();
+
+    Fill("pfmet_scaled", met, f);
+  }
 }
