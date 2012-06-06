@@ -107,6 +107,7 @@ ls
         print "Errors found:", stderr
         sys.exit(1)
     for line in stdout.splitlines():
+        line = line.replace("uberftp> ", "")
         # split into file size and file name
         try:
             size = int(line.split()[4])
