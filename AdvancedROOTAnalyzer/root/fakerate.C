@@ -562,9 +562,9 @@ TH1D * get_1d_ratio(TH3D * hTight3, TH3D * hLoose3)
   return hRatio1;
 }
 
-void ratioplot()
+void tight_loose_ratioplot()
 {
-  DEBUG("ratioplot() start");
+  DEBUG("tight_loose_ratioplot() start");
   MakeCanvas();
 
   DEBUG("reading histograms");
@@ -722,9 +722,9 @@ void tightlooseplots(int start = 1, int end = 5)
 
 	cd(2);
 	plot("nTL_mt");
-	logy();
-	min(0.9);
-	arrow(200.);
+	zoom(0, 100);
+	liny();
+	arrow(40.);
 	legend(1e-3);
 	print("tightloose_3.pdf");  
 	break;
@@ -789,29 +789,60 @@ void doublefakeplots(const char * sele = "doublefake")
   print("doublefake_3.pdf");
 }
 
-TH1D * get_doublefakes(const char * hname)
+// subtract all background MCs from data but the one specified with "notremove"
+double get_fakes(const char * hname, const char * notremove)
 {
-  if (gStart != gEnd) {
-    ERROR("Cannot work for more than one period");
-    return 0;
-  }
+  // get number of single fakes from data histogram
+  plot(hname);
+  rebin(5);
+  legend();
+  TH1D * hData = dataHisto();
+  double N = hData->Integral();
+  INFO("Data events: " << N);
+
+  TH1D * hSub = backgroundHisto(notremove, false);
+  N = hSub->Integral();
+  INFO("Background events : " << N);
+  hData->Add(hSub, -1.);
+  N = hData->Integral();
+  INFO("Single fakes: " << N);
+
+  return N;
+}
+
+/** Estimate number of single fakes
+ *
+ * Removes all MCs from data but wjets (which is estimated by this)
+ *
+ * @BUG: this also removes wwjets but contribution is negligible.
+ */
+double get_singlefakes(const char * hname)
+{
+  return get_fakes(hname, "wjets");
+}
+
+double get_doublefakes(const char * hname)
+{
+  return get_fakes(hname, "qcd");
+}
+
+/* Estimate single- and double-fakes and derive number of QCD and W+jets events. */
+double fake_estimate(const char * sel, const char * hname)
+{
   MakeCanvas();
-  TFile f(Form("%s/%s", getpath(gStart), "data_doublemu.root"));
-  TH1D * hmu = (TH1D *) f.Get(hname);
-  hmu->SetDirectory(0);
-  setopt(hmu);
-  hmu->Rebin(5);
-  hmu->Draw();
-  double N = hmu->Integral();
-  cout << "Found " << N << " events in final selection" << endl;
+  selection(Form("singlefake%s", sel));
+  cd(1);
+  double N_sf = get_singlefakes(hname);
+  selection(Form("doublefake%s", sel));
   cd(2);
-  TH1D * hcut = (TH1D *) f.Get("h1_cutflow");
-  hcut->SetDirectory(0);
-  setopt(hcut);
-  hcut->SetMarkerStyle(8);
-  hcut->SetMaximum(70.);
-  hcut->Draw("ep");
-  N = hcut->GetBinContent(12.);
-  cout << "Got " << N << " events from cut flow" << endl;
-  return hcut;
+  double N_df = get_doublefakes(hname);
+  print(Form("%s-fake_estimate.pdf", sel));
+  INFO("N_sf = " << N_sf);
+  INFO("N_df = " << N_df);
+  // subtract double fakes from single fakes
+  double N_W   = N_sf - N_df;
+  double N_QCD = N_df;
+  INFO("QCD    events: " << N_QCD);
+  INFO("W+jets events: " << N_W);
+  return N_W + N_QCD;
 }

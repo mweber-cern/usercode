@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 
   // check command line arguments
   if (argc != 2) {
-    cout << "Usage: analyzer input filetype outputfile configfile " << endl;
+    cout << "Usage: analyzer configfile " << endl;
     return E_WRONG_PARAMS;
   }
 

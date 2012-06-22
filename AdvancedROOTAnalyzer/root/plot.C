@@ -2145,55 +2145,65 @@ void plot3(const char * hname, const TH3D * hsample, const char * selection)
   }
 }
 
-TH1D * signalHisto(const char * signal_name)
+TH1D * getHisto(const char * name, bool match, int min, int max)
 {
-  // creates a histogram containing only signal, summing up all individual signal
-  // histograms whose file name contains "signal_name". 
+  // sum up all histograms that match the given name, starting from min up to
+  // (but not including) max.
+  // 
+  // If match is true all individual signal histograms whose file name
+  // contains "name" are summed up. If match is false, all individual signal
+  // histograms but those whose file name matches "name" are taken. If name ==
+  // 0, all histograms are taken.  
+  // 
   // Can be used e.g. for fitting (see xsection.C)
 
-  // loop over background MC's (not data)
-  TH1D * hSignal = 0;
-  for (Int_t j = 0; j < gMaxSignal; j++) {
+  TH1D * hMC = 0;
+  // loop over all processes in given range
+  for (Int_t j = min; j < max; j++) {
     TH1D * histo = gHisto[gPadNr][j];
     if (histo == 0)
       continue;
     TString s(gProcess[j].fname);
-    if (signal_name != 0 && !s.Contains(signal_name))
+    if (name != 0 && ((match && !s.Contains(name)) || (!match && s.Contains(name)))) {
+      DEBUG("skipping process " << s);
       continue;
-    if (hSignal == 0) {
-      hSignal = new TH1D(*histo);
-      hSignal->SetDirectory(0);
+    }
+    DEBUG("adding process " << s);
+    if (hMC == 0) {
+      hMC = new TH1D(*histo);
+      hMC->SetDirectory(0);
     }
     else {
-      hSignal->Add(histo, 1);
+      hMC->Add(histo, 1);
     }
   }
-
-  return hSignal;
+  return hMC;
 }
 
-TH1D * backgroundHisto(const char * signal_name)
+TH1D * signalHisto(const char * name, bool match)
 {
-  // creates a histogram containing only background, summing up all individual
-  // background histograms and all signal histograms that do not start with "signal_name"
+  // Return a histogram containing only signal. If match is true all
+  // individual signal histograms whose file name contains "name" are summed
+  // up. If match is false, all individual signal histograms but those whose
+  // file name matches "name" are taken. If name == 0, all histograms are
+  // taken.
+  //
   // Can be used e.g. for fitting (see xsection.C)
-  TH1D * hBackground = 0;
-  for (Int_t j = 0; j < gMaxProcess-1; j++) {
-    TH1D * histo = gHisto[gPadNr][j];
-    if (histo == 0)
-      continue;
-    TString s(gProcess[j].fname);
-    if (j < gMaxSignal && signal_name != 0 && s.Contains(signal_name))
-      continue;
-    if (hBackground == 0) {
-      hBackground = new TH1D(*histo);
-      hBackground->SetDirectory(0);
-    }
-    else {
-      hBackground->Add(histo, 1);
-    }
-  }
-  return hBackground;
+
+  return getHisto(name, match, 0, gMaxSignal);
+}
+
+TH1D * backgroundHisto(const char * name, bool match)
+{
+  // Return a histogram containing only background. If match is true all
+  // individual background histograms whose file name contains "name" are
+  // summed up. If match is false, all individual background histograms but
+  // those whose file name matches "name" are taken. If name == 0, all
+  // histograms are taken.
+  //
+  // Can be used e.g. for fitting (see xsection.C)
+
+  return getHisto(name, match, gMaxSignal, gMaxProcess-1);
 }
 
 TH1D * dataHisto()

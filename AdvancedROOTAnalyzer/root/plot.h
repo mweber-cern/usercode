@@ -181,11 +181,11 @@ void plotadd(const char * name1, const char * name2);
 void plotadd(const char * name1, const char * name2,
 	     const char * name3, const char * name4);
 
-// for fitting
-TH1D * signalHisto(const char * signal_name = 0);
-TH1D * backgroundHisto(const char * signal_name = 0);
+// get sums of specific histograms for special purposes, e.g. fitting
+TH1D * getHisto(const char * name = 0, bool match = true, int min=0, int max = gMaxProcess-1);
+TH1D * signalHisto(const char * name = 0, bool match = true);
+TH1D * backgroundHisto(const char * name = 0, bool match = true);
 TH1D * dataHisto();
-
 
 // technical stuff used by other macros, do not use directly
 void setopt(TStyle * style);

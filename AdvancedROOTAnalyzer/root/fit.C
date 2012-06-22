@@ -1,6 +1,9 @@
 #include "TMath.h"
 #include "TCanvas.h"
 #include "TH1D.h"
+#include "TF1.h"
+
+#include "plot.h"
 
 /**
  * Crystal Ball function
@@ -90,4 +93,14 @@ void test_crystal_ball()
   h2->Draw("same");
   h3->SetLineColor(kRed);
   h3->Draw("same");
+}
+
+void fitmc(TF1 * f1)
+{
+  TH1D * back = backgroundHisto("LM1");
+  // do a log-likelihood fit (ll), do not plot result (0), and use function range (R)
+  back->Fit("f1", "R0", "goff");
+  f1->SetLineColor(kBlue);
+  f1->SetLineWidth(2.);
+  f1->Draw("same");
 }

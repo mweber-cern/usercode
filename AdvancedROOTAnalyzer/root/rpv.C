@@ -6,6 +6,8 @@
 #include "TMath.h"
 #include "TROOT.h"
 #include "TFile.h"
+#include "TLatex.h"
+#include "TF1.h"
 
 #endif // __CINT__
 
@@ -416,7 +418,6 @@ void compute_energy_resolution()
 
   Int_t ndof = 0;
   Int_t nlow = 0;
-  double ChiSquare = 0;
   // loop over all possible scale factor values
   for (int biny = 1; biny < hData->GetNbinsY()+1; biny++) {
     double scale = hData->GetYaxis()->GetBinLowEdge(biny)+hData->GetYaxis()->GetBinWidth(biny)/2.;
@@ -426,7 +427,8 @@ void compute_energy_resolution()
     pBackground->Draw();
     gPad->Update();
     // compute chi2 between data and background
-    for (int binx = 1; binx < pData->GetNbinsX()+1; binx++) {
+    double ChiSquare = 0;
+    for (int binx = 1; binx < pData->GetNbinsX()+1 && pData->GetBinLowEdge(binx) < 100; binx++) {
       // sum of all MC's ( theory )
       double temp1 = pBackground->GetBinContent(binx);
 
@@ -443,8 +445,71 @@ void compute_energy_resolution()
 	nlow++;
       }
     }
+    // "Fill" Histogram
     hResult->SetBinContent(biny, ChiSquare);
-  }
+    // in order to be able to fit the histogram, one also needs bin errors
+    hResult->SetBinError(biny, 1.);
+  }   
   cd(3);
-  hResult->Draw();
+  hResult->Draw("hist");
+
+  // obtain minimum from fit
+  TF1 * f1 = new TF1("f1", "pol2", 
+		     hResult->GetBinLowEdge(1), 
+		     hResult->GetBinLowEdge(hResult->GetNbinsX()+2));
+  hResult->Fit(f1, "R0", "goff");
+  f1->SetLineColor(kBlue);
+  f1->SetLineWidth(2.);
+  f1->Draw("same");
+  double a = f1->GetParameter(0); 
+  double b = f1->GetParameter(1);
+  double c = f1->GetParameter(2);
+  double minvalue = -b/(2*c);
+  double sigma = 1./TMath::Sqrt(c);
+  INFO("minimum from fit: f = " << minvalue << " +/- " << sigma 
+       << ", chi2 = " << f1->Eval(minvalue));
+
+  // get minimum of histogram, take the corresponding scale factor, 
+  // and plot data and MC for optical comparison
+  Int_t biny = hResult->GetMinimumBin();
+  Double_t best_scale = hResult->GetBinLowEdge(biny)+hResult->GetBinWidth(biny)/2.;
+  Double_t best_chi2 = hResult->GetBinContent(biny);
+  INFO("best scale factor: " << best_scale << " with chi2 = " << best_chi2);
+  TH1D * pBack = hBackground->ProjectionX("_px", biny, biny);
+
+  cd(4);
+  pBack->SetFillColor(kYellow);
+  pBack->Draw("hist");
+  pData->Draw("epsame");
+  TLatex * l = new TLatex(0.5, 0.85, Form("scale = %5.3f", best_scale));
+  l->SetNDC();
+  l->Draw();
 }
+
+void plotlinlog(const char * name)
+{
+  cd(1);
+  plot(name);
+  liny();
+  legend();
+  
+  cd(2);
+  plot(name);
+  logy();
+  legend();
+
+  print(Form("%s.pdf", name));
+}
+
+void mc_comparison()
+{
+  setup("../config/plot2.cfg");
+  selection("mctest");
+  MakeCanvas();
+
+  plotlinlog("check_mumass");
+  plotlinlog("check_vtxn");
+  plotlinlog("check_nmuon");
+  plotlinlog("check_njets");
+}
+

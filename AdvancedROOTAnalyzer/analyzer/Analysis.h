@@ -49,7 +49,9 @@ protected:
   Double_t  fSkimMuoptfirst; // cut on muon with highest pt
   Double_t  fSkimMuoptother; // cut on muon with second highest pt
   Double_t  fLooseMuonRelIso; // relative isolation cut for loose muon
+  string    fFakeRateMethod; // fake rate method, "lastbin" or "zero"
   Int_t     fFakeRateDimensions; // number of dimensions for fake rate calculation
+  vector<string> fTrigger; // trigger selection
 
   // cuts for T/L ratio
   Double_t fTL_met_max;
@@ -63,10 +65,15 @@ protected:
   Double_t fTL_jetdphi_min;
   Double_t fTL_mt_max;
 
+  // values for smearing jet energies (JER)
+  Double_t fJER_scale;
+  Double_t fJER_center;
+  Double_t fJER_smear;
+  Double_t fJER_met_old;
+
   //////////////////////////////////////////////////////////////////////
   // analysis variables
   bool      fIsSignal;
-  TString * fTrigger;
   TH3D  *   fFakeRateHisto3D;
   TH2D  *   fFakeRateHisto2D;
   Int_t     fJets;
@@ -90,8 +97,8 @@ protected:
 				  const double HT);
   double GetFakeRate(double muopt, double eta, double jetpt);
   bool filterHBHENoise();
-  void doPFJetSmearing();
-  void doPFJetSmearingCalculation();
+  void PFJetSmearing();
+  void PFJetSmearingCalculation();
 
   // helper functions
   void CreateHistograms();
