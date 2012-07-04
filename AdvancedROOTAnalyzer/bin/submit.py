@@ -66,21 +66,31 @@ def submit(jobgroup, job, period):
 
     # read files from directory
     # call program and record both stderr and stdout
-    filespecs = []
+    filelist = []
     section = jobgroup+':'+period
     try:
         for thisdir in ara.config.get(section, job).split(','):
-            filespec =  os.path.abspath(os.path.expanduser(thisdir)) + '/*.root'
-            filespecs.append(filespec)
-            filelist = ara.getCommandOutput2('ls ' + " ".join(filespecs))
-        
+            print 'Adding files from dir', thisdir
+            # run over files on dCache?
+            if thisdir.startswith("dcap:/"):
+                # list files on dcache
+                path=thisdir[5:]
+                files = ara.uberftpls(path)
+                for (size, filename) in files:
+                    filelist.append(ara.config.get('Grid', 'dcap') + path + '/' + filename)
+            else:
+                filespec =  os.path.abspath(os.path.expanduser(thisdir)) + '/*.root'
+                files = ara.getCommandOutput2('ls ' + filespec)
+                for filename in files.splitlines():
+                    filelist.append(filename)
+
     except ConfigParser.NoSectionError:
         print "Could not find section %s in main configuration file %s" % ( section , options.cfgfile )
         print "You must create this section and add entries to it"
         return False
 
     # determine file splitting
-    list_of_lists = ara.split_in_jobs(filelist.splitlines(), options.nsplit)
+    list_of_lists = ara.split_in_jobs(filelist, options.nsplit)
     n = 0
     for files in list_of_lists:
         print "Job #", n, ": ", len(files), " files"

@@ -37,29 +37,28 @@ def getCommandOutput2(command):
         raise RuntimeError, '%s failed with exit code %d' % (command, err)
     return data
 
-def getStoragePath(directory):
+def getUserStoragePath(directory):
     global config
     user = config.get('Grid', 'user')
-    se = config.get('Grid', 'se')
     sp = config.get('Grid', 'sp')
     path = sp+'/'+user+'/'+directory+'/'
     path = path.replace('//', '/')
-    return (se, path)
+    return path
 
 ######################################################################
 # list the contents of the given directory on the grid storage element
 # returns a list of [filesize, filename]
 # depends on global configuration object
-def srmls(directory, verbose=False):
-    (se, path) = getStoragePath(directory)
+def srmls(path, verbose=False):
     offset = 0
     files = []
     foundall = False
+    fullpath = config.get('Grid', 'se')+path
     while not foundall:
         if verbose:
-            print 'Listing ', se+path, 'at offset', offset
+            print 'Listing', fullpath, 'at offset', offset
         # call program and record both stderr and stdout
-        p = subprocess.Popen(["srmls", "-offset="+str(offset), "-count=999", se+path],
+        p = subprocess.Popen(["srmls", "-offset="+str(offset), "-count=999", fullpath],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p.communicate()
         if len(stderr) > 0:
@@ -87,26 +86,28 @@ def srmls(directory, verbose=False):
             foundall = True
     return files
 
-def uberftpls(directory, verbose=False):
-    (se, path) = getStoragePath(directory)
+def uberftpls(path, verbose=False):
+    ftp = config.get('Grid', 'ftp')
     offset = 0
+    fullpath = ftp+path
     files = []
     if verbose:
-        print 'Listing ', se+path, 'at offset', offset
+        print 'Listing ', fullpath
     # create temporary file with commands for uberftp
     commands = """cd %s
 ls
 """ % ( path )
-#    mytempfile = tempfile.TemporaryFile()
-#    mytempfile.write(commands)
     # call program and record both stderr and stdout
-    p = subprocess.Popen(["uberftp", "grid-ftp"], stdin=subprocess.PIPE, 
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p = subprocess.Popen(["uberftp", config.get('Grid','ftp')], 
+                         stdin=subprocess.PIPE, 
+                         stdout=subprocess.PIPE, 
+                         stderr=subprocess.PIPE)
     stdout, stderr = p.communicate(commands)
     if len(stderr) > 0:
         print "Errors found:", stderr
         sys.exit(1)
     for line in stdout.splitlines():
+        # remove uberftp prompt
         line = line.replace("uberftp> ", "")
         # split into file size and file name
         try:
@@ -121,17 +122,17 @@ ls
         files.append([size, fname])
     return files
 
-def srmrm(directory, filenames):
-    (se, path) = getStoragePath(directory)
-    command = 'srmrm ' 
+def srmrm(path, filenames):
+    se = config.get('Grid', 'se')
+    command = 'srmrm '
     for filename in filenames:
         print filename
         command = command + " "  + se + path + filename
     msg = getCommandOutput2(command)
     return msg
 
-def srmrmdir(directory):
-    (se, path) = getStoragePath(directory)
+def srmrmdir(path):
+    se = config.get('Grid', 'se')
     return getCommandOutput2('srmrmdir '+se+path)
 
 def split_in_jobs(filenames, njobs):

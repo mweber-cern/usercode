@@ -23,7 +23,8 @@ def main():
     ara.config.read(options.cfgfile)
 
     # get file names from Grid storage element
-    srmfiles = ara.srmls(args[0], True)
+    path = ara.getUserStoragePath(args[0])
+    srmfiles = ara.srmls(path, True)
     filenames=[]
     for (size, filename) in srmfiles:
         filenames.append(filename)
@@ -31,13 +32,13 @@ def main():
     # remove individual files
     if len(filenames) > 0:
         print "Removing files"
-        msg = ara.srmrm(args[0], filenames)
+        msg = ara.srmrm(path, filenames)
         if msg != '':
             print msg
 
     # remove directory
-    print "Removing directory", args[0]
-    msg = ara.srmrmdir(args[0])
+    print "Removing directory", path
+    msg = ara.srmrmdir(path)
     if msg != '':
         print msg
     return 0
