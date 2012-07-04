@@ -9,11 +9,11 @@ import shutil
 ######################################################################
 # misc helper functions
 def getType(job):
-    if "data" in job:
+    if "DATA" in job.upper():
         return "data"
-    elif "signal" in job:
+    elif "SIGNAL" in job.upper():
         return "signal"
-    elif "background" in job:
+    elif "BACKGROUND" in job.upper():
         return "background"
     else:
         return "mc"
