@@ -43,7 +43,7 @@ int main(int argc, char *argv[])
 
   // check command line arguments
   if (argc != 2) {
-    cout << "Usage: analyzer configfile " << endl;
+    ERROR("Usage: analyzer configfile ");
     return E_WRONG_PARAMS;
   }
 
@@ -87,6 +87,7 @@ int main(int argc, char *argv[])
   INFO("# analyzer: Creating output file and cloning tree")
   TFile * outFile = new TFile(outputFileName, "RECREATE");
   if (outFile == 0 || !outFile->IsOpen()) {
+    ERROR("Could not open output file " << outputFileName);
     return E_OUTPUTFILE;
   }
   outFile->mkdir("ACSkimAnalysis");
@@ -105,6 +106,7 @@ int main(int argc, char *argv[])
   // clone tree structure, do not copy events...
   TTree * outTree = chain->CloneTree(0);
   if (outTree == 0) {
+    ERROR("Could not clone tree from input file - maybe no tree in input file?");
     return E_NO_TREE;
   }
   // histograms belong to ROOT directory...
@@ -117,6 +119,7 @@ int main(int argc, char *argv[])
   }
   CATCH;
   if (analysis == 0) {
+    ERROR("Could not create analysis class - out of memory?");
     return E_NO_ANALYSIS;
   }
 
