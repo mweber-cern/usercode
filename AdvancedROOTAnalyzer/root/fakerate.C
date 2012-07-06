@@ -230,6 +230,42 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
   INFO("Histo: Tight muons: " << hTight3_data->Integral() 
        << ", loose muons: " << hLoose3_data->Integral());
 
+  // compute 3D ratio
+  TH3D * hRatio3 = new TH3D(*hTight3_data);
+  hRatio3->SetDirectory(0);
+  hRatio3->SetName("hRatio3");
+  hRatio3->SetTitle("Tight/Loose ratio (T/L) (3D)");
+
+  // divide with binomial errors
+  hRatio3->Divide(hTight3_data, hLoose3_data, 1., 1., "B");
+  // some sanity checks
+  for (Int_t i = 1;  i < hRatio3->GetNbinsX()+1; i++) {
+    for (Int_t j = 1; j < hRatio3->GetNbinsY()+1; j++) {
+      for (Int_t k = 1; k < hRatio3->GetNbinsZ()+1; k++) {
+	Double_t nLoose = hLoose3_data->GetBinContent(i, j, k);
+	Double_t nTight = hTight3_data->GetBinContent(i, j, k);
+	Double_t nRatio = hRatio3->GetBinContent(i, j, k);
+	Double_t error  = hRatio3->GetBinError(i, j, k);
+
+	if (nLoose < nTight || nLoose < 0) {
+	  cerr << "ERR: nLoose is wrong in your histogram" << endl;
+	  cout << "INFO: nLoose(" << get_bin_edges(hRatio3, i, j, k) << ") " << nLoose << endl;
+	  cout << "INFO: nTight(" << get_bin_edges(hRatio3, i, j, k) << ") " << nTight << endl;
+	}
+	if (nLoose != 0 && nRatio != nTight/nLoose) {
+	  cerr << "ERR: ROOT calculation went wrong" << endl;
+	}
+	if (nRatio < 0 || nRatio >= 1.) {
+	  cerr << "ERR: Found unreasonable values for T/L ratio" << endl;
+	}
+	if (nRatio != 0) {
+	  cout << "INFO: T/L (" << get_bin_edges(hRatio3, i, j, k) << ") " 
+	       << nRatio << " +- " << error << endl;
+	}
+      }
+    }
+  }
+
   // now work in 2D-Projection (NUF = do not project underflow, NOF = ... overflow)
   TH2D * hTight2 = (TH2D *) hTight3_data->Project3D("yxNUFNOF");
   TH2D * hLoose2 = (TH2D *) hLoose3_data->Project3D("yxNUFNOF");
@@ -248,7 +284,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
   // fix 2d histogram for insane values
   fix_2d_histo(hTight2, hLoose2);
 
-  // compute ratio
+  // compute 2D ratio
   TH2D * hRatio2 = new TH2D(*hTight2);
   hRatio2->SetDirectory(0);
   hRatio2->SetName("hRatio2");
@@ -324,7 +360,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
     hRatio2->Draw("lego2");
   }
 
-  // now do the same in 1D-Projection
+  // compute 1D ratio
   TH1D * hTight1 = (TH1D *) hTight3_data->Project3D("x");
   TH1D * hLoose1 = (TH1D *) hLoose3_data->Project3D("x");
   TH1D * hRatio1 = new TH1D(*hTight1);
@@ -336,155 +372,11 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
   hRatio1->Divide(hTight1, hLoose1, 1., 1., "B");
 
   if (save) {
-    const char * fakeRateFileName = "FakeRate.root";
+    // overwrite existing file
+    const char * fakeRateFileName = Form("../config/FakeRate_%s.root", gSubDir);
     TFile * fakeRateFile = new TFile(fakeRateFileName, "RECREATE");
     if (fakeRateFile == 0 || !fakeRateFile->IsOpen()) {
-      cerr << "ERR: Could not open fake rate file " << fakeRateFileName << endl;
-      return 0;
-    }
-    hRatio1->Write();
-    hRatio2->Write();
-    fakeRateFile->Close();
-    delete fakeRateFile;
-  }
-
-  if (draw) {
-    cd(2);
-    hRatio1->Draw();
-  }
-  return hRatio1;
-}
-
-TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
-{
-  if (gStart != gEnd) {
-    ERROR("tight_loose_ratio() can only be called for one period!");
-    return 0;
-  }
-  TFile f(Form("%s/%s.root", getpath(gStart), process));
-  if (!f.IsOpen()) {
-    return 0;
-  }
-  TH3D * hTight3 = 0;
-  TH3D * hLoose3 = 0;
-  if (gVersion == 0) {
-    hTight3 = (TH3D *) f.Get("h3_TightMuons");
-    hLoose3 = (TH3D *) f.Get("h3_LooseMuons");
-  }
-  else {
-    hTight3 = (TH3D *) f.Get("h3_0_TightMuons");
-    hLoose3 = (TH3D *) f.Get("h3_0_LooseMuons");
-  }
-  if (hTight3 == 0) {
-    cerr << "Could not get hTight3" << endl; 
-    return 0;
-  }
-  if (hLoose3 == 0) {
-    cerr << "Could not get hLoose3" << endl; 
-    return 0;
-  }
-  TH3D * hRatio3 = new TH3D(*hTight3);
-  hRatio3->SetDirectory(0);
-  hRatio3->SetName("hRatio3");
-  hRatio3->SetTitle("Tight/Loose ratio (T/L) (3D)");
-
-  // divide with binomial errors
-  hRatio3->Divide(hTight3, hLoose3, 1., 1., "B");
-  // some sanity checks
-  for (Int_t i = 1;  i < hRatio3->GetNbinsX()+1; i++) {
-    for (Int_t j = 1; j < hRatio3->GetNbinsY()+1; j++) {
-      for (Int_t k = 1; k < hRatio3->GetNbinsZ()+1; k++) {
-	Double_t nLoose = hLoose3->GetBinContent(i, j, k);
-	Double_t nTight = hTight3->GetBinContent(i, j, k);
-	Double_t nRatio = hRatio3->GetBinContent(i, j, k);
-	Double_t error  = hRatio3->GetBinError(i, j, k);
-
-	if (nLoose < nTight || nLoose < 0) {
-	  cerr << "ERR: nLoose is wrong in your histogram" << endl;
-	  cout << "INFO: nLoose(" << get_bin_edges(hRatio3, i, j, k) << ") " << nLoose << endl;
-	  cout << "INFO: nTight(" << get_bin_edges(hRatio3, i, j, k) << ") " << nTight << endl;
-	}
-	if (nLoose != 0 && nRatio != nTight/nLoose) {
-	  cerr << "ERR: ROOT calculation went wrong" << endl;
-	}
-	if (nRatio < 0 || nRatio >= 1.) {
-	  cerr << "ERR: Found unreasonable values for T/L ratio" << endl;
-	}
-	if (nRatio != 0) {
-	  cout << "INFO: T/L (" << get_bin_edges(hRatio3, i, j, k) << ") " 
-	       << nRatio << " +- " << error << endl;
-	}
-      }
-    }
-  }
-
-  // now do the same in 2D-Projection
-  TH2D * hTight2 = (TH2D *) hTight3->Project3D("yx");
-  TH2D * hLoose2 = (TH2D *) hLoose3->Project3D("yx");
-  TH2D * hRatio2 = new TH2D(*hTight2);
-  setopt(hRatio2);
-  hRatio2->SetTitleOffset(2.0, "X");
-  hRatio2->SetTitleOffset(2.0, "Y");
-  hRatio2->SetDirectory(0);
-  hRatio2->SetName("hRatio2");
-  hRatio2->SetTitle("Tight/Loose ratio (T/L) (2D)");
-
-  // divide with binomial errors
-  hRatio2->Divide(hTight2, hLoose2, 1., 1., "B");
-  // some sanity checks
-  for (Int_t i = 1;  i < hRatio2->GetNbinsX()+1; i++) {
-    for (Int_t j = 1; j < hRatio2->GetNbinsY()+1; j++) {
-      Double_t nLoose = hLoose2->GetBinContent(i, j);
-      Double_t nTight = hTight2->GetBinContent(i, j);
-      Double_t nRatio = hRatio2->GetBinContent(i, j);
-      Double_t error  = hRatio2->GetBinError(i, j);
-
-      if (nLoose < nTight || nLoose < 0) {
-	cerr << "ERR: nLoose is wrong in your histogram" << endl;
-	cout << "INFO: nLoose(" << get_bin_edges(hRatio2, i, j) << ") " << nLoose << endl;
-	cout << "INFO: nTight(" << get_bin_edges(hRatio2, i, j) << ") " << nTight << endl;
-      }
-      if (nLoose != 0 && nRatio != nTight/nLoose) {
-	cerr << "ERR: ROOT calculation went wrong" << endl;
-      }
-      if (nRatio < 0 || nRatio >= 1.) {
-	cerr << "ERR: Found unreasonable values for T/L ratio" << endl;
-      }
-      if (nRatio != 0) {
-	cout << "INFO: T/L (" << get_bin_edges(hRatio2, i, j) << ") " 
-	     << nRatio << " +- " << error << endl;
-      }
-    }
-  }
-
-  // now do the same in 1D-Projection
-  TH1D * hTight1 = (TH1D *) hTight3->Project3D("x");
-  TH1D * hLoose1 = (TH1D *) hLoose3->Project3D("x");
-  TH1D * hRatio1 = new TH1D(*hTight1);
-  hRatio1->SetDirectory(0);
-  hRatio1->SetName("hRatio1");
-  hRatio1->SetTitle("Tight/Loose ratio (T/L)");
-
-  // divide with binomial errors
-  hRatio1->Divide(hTight1, hLoose1, 1., 1., "B");
-
-  // make plots
-  cout << "Period: " << gPeriod[gStart] << " Ratio OK." << endl;
-  MakeCanvas();
-  cd(1);
-  hRatio1->Draw("le");
-  cd(2);
-  hRatio2->Draw("LEGO2");
-  setopt(hRatio2);
-  hRatio2->GetXaxis()->SetTitle("#mu p_{T} [GeV]");
-  hRatio2->GetYaxis()->SetTitle("#mu #eta");
-  hRatio2->GetZaxis()->SetTitle("T/L ratio");
-
-  if (save) {
-    const char * fakeRateFileName = "FakeRate.root";
-    TFile * fakeRateFile = new TFile(fakeRateFileName, "RECREATE");
-    if (fakeRateFile == 0 || !fakeRateFile->IsOpen()) {
-      cerr << "ERR: Could not open fake rate file " << fakeRateFileName << endl;
+      ERROR("Could not open fake rate file " << fakeRateFileName);
       return 0;
     }
     hRatio1->Write();
@@ -494,7 +386,10 @@ TH1D * tight_loose_ratio(const char * process = "data_doublemu", bool save=true)
     delete fakeRateFile;
   }
 
-  // return one-dimensional plot
+  if (draw) {
+    cd(2);
+    hRatio1->Draw();
+  }
   return hRatio1;
 }
 
@@ -797,10 +692,18 @@ double get_fakes(const char * hname, const char * notremove)
   rebin(5);
   legend();
   TH1D * hData = dataHisto();
+  if (hData == 0) {
+    ERROR("get_fakes() needs a data histogram");
+    return 0;
+  }
   double N = hData->Integral();
   INFO("Data events: " << N);
 
   TH1D * hSub = backgroundHisto(notremove, false);
+  if (hSub == 0) {
+    ERROR("get_fakes() needs a background histogram");
+    return 0;
+  }
   N = hSub->Integral();
   INFO("Background events : " << N);
   hData->Add(hSub, -1.);
@@ -827,22 +730,78 @@ double get_doublefakes(const char * hname)
 }
 
 /* Estimate single- and double-fakes and derive number of QCD and W+jets events. */
-double fake_estimate(const char * sel, const char * hname)
+void fake_estimate(const char * sel, const char * hname, double & N_W, double & N_QCD)
 {
   MakeCanvas();
-  selection(Form("singlefake%s", sel));
+  selection(Form("%s_singlefake", sel));
   cd(1);
   double N_sf = get_singlefakes(hname);
-  selection(Form("doublefake%s", sel));
+  selection(Form("%s_doublefake", sel));
   cd(2);
   double N_df = get_doublefakes(hname);
   print(Form("%s-fake_estimate.pdf", sel));
   INFO("N_sf = " << N_sf);
   INFO("N_df = " << N_df);
   // subtract double fakes from single fakes
-  double N_W   = N_sf - N_df;
-  double N_QCD = N_df;
+  N_W   = N_sf - N_df;
+  N_QCD = N_df;
   INFO("QCD    events: " << N_QCD);
   INFO("W+jets events: " << N_W);
-  return N_W + N_QCD;
+}
+
+struct syst_struct {
+  const char * sel;
+  const char * cfg;
+};
+
+void fakerate_systematics(int istart = 0, int iend = 999)
+{
+  // histogram name to be used for plotting
+  const char * hname = "m_smuon";
+
+  // reference values from standard analysis
+  double N_W_ref;
+  double N_QCD_ref;
+
+  // get default values
+  fake_estimate("default13", hname, N_W_ref, N_QCD_ref);
+
+  // list of systematics
+  const int nMax = 10;
+  const syst_struct sel[nMax] = {
+    { "reliso_03", "" },
+    { "reliso_05", "" },
+    { "reliso_06", "" },
+    { "reliso_08", "" },
+
+    { "jetptmin_50", "" },
+    { "jetptmin_60", "" },
+    { "jetptmin_80", "" },
+
+    { "fakeratemethod_zero", "" },
+    
+    { "triggerbias_singlemu", "singlemu" },
+    { "triggerbias_mu8_jet40", "mu8_jet40" }
+  };
+
+  // event counters
+  double N_W[nMax];
+  double N_QCD[nMax];
+
+  // get all numbers
+  for (int i = istart; i < TMath::Min(iend, nMax); i++) {
+    setup(Form("../config/plot%s.cfg", sel[i].cfg));
+    fake_estimate(sel[i].sel, hname, N_W[i], N_QCD[i]);
+  }
+
+  // compute differences
+  for (int i = istart; i < TMath::Min(iend, nMax); i++) {
+    N_QCD[i] -= N_QCD_ref;
+    N_W[i] -= N_W_ref;
+    // output table line
+    cout << sel[i].sel << ": " 
+	 << "QCD = " << 100.*N_QCD[i]/N_QCD_ref << "%, " 
+	 << "W = " << 100.*N_W[i]/N_W_ref << "%" << endl;
+  }
+  
 }
