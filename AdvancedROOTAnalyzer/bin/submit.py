@@ -70,7 +70,7 @@ def submit(jobgroup, job, period):
     section = jobgroup+':'+period
     try:
         for thisdir in ara.config.get(section, job).split(','):
-            print 'Adding files from dir', thisdir
+            print 'Adding files from directory', thisdir
             # run over files on dCache?
             if thisdir.startswith("dcap:/"):
                 # list files on dcache
@@ -90,6 +90,7 @@ def submit(jobgroup, job, period):
         return False
 
     # determine file splitting
+    print 'Found', len(filelist), 'files'
     list_of_lists = ara.split_in_jobs(filelist, options.nsplit)
     n = 0
     for files in list_of_lists:
@@ -101,6 +102,7 @@ def submit(jobgroup, job, period):
         cfgTemplateFile = open(cfgPath + '/' + cfgName)
         cfg = cfgTemplateFile.read()
         repMap = {}
+        repMap["sample"] = job
         repMap["inputfile"] = " ".join(files)
         outputFile = job + '_' + str(n) + '.root'
         repMap["outputfile"] = outputFile
