@@ -54,11 +54,15 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fInputType = fCfgFile.GetValue("FileType", "data");
   if (fInputType != "signal" && fInputType != "background" && fInputType != "data" && fInputType != "mc")
     THROW("FileType \"" + fInputType + "\" is not an allowed value");
+  fSample = fCfgFile.GetValue("Sample", "None");
+  if (fSample == "None")
+    THROW("Value \"Sample\" either \"None\" or not configured in configuration file");
   fAnalysisType = fCfgFile.GetValue("AnalysisType", "default");
   if (fAnalysisType != "default"
     && fAnalysisType != "singlefake" && fAnalysisType != "doublefake")
     THROW("AnalysisType \"" + fAnalysisType + "\" is not an allowed value");
   split(cfgFile.GetValue("Trigger", "None"), ',', fTrigger);
+  fForceUnprescaledTriggers = fCfgFile.GetValue("ForceUnprescaledTriggers", true);
   // maximum number of events to be processed (-1: process all)
   fMaxEvents = fCfgFile.GetValue("MaxEvents", -1);
   // maximum tree size for output file
@@ -691,10 +695,16 @@ void Analysis::Loop()
     // fill N-1 histograms
     TCutList skimCuts(histo, global_weight);
     skimCuts.Set("nSkim_muo_n", muo_n >= fSkimMuons, muo_n);
-    skimCuts.Set("nSkim_muo_pt0", muo_n > 0 ? muo_pt[0] >= fSkimMuoptfirst : false,
-		 muo_n > 0 ? muo_pt[0] : 0);
-    skimCuts.Set("nSkim_muo_pt1", muo_n > 1 ? muo_pt[1] >= fSkimMuoptother : false,
-		 muo_n > 1 ? muo_pt[1] : 0);
+    if (fSkimMuons > 0)
+      skimCuts.Set("nSkim_muo_pt0", muo_n > 0 ? muo_pt[0] >= fSkimMuoptfirst : false,
+		   muo_n > 0 ? muo_pt[0] : -1.);
+    else 
+      skimCuts.Set("nSkim_muo_pt0", true, muo_n > 0 ? muo_pt[0] : -1.);
+    if (fSkimMuons > 1)
+      skimCuts.Set("nSkim_muo_pt1", muo_n > 1 ? muo_pt[1] >= fSkimMuoptother : false,
+		   muo_n > 1 ? muo_pt[1] : -1.);
+    else 
+      skimCuts.Set("nSkim_muo_pt1", true, muo_n > 1 ? muo_pt[1] : -1.);
     skimCuts.FillHistograms();
 
     // apply cuts
@@ -707,7 +717,6 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // Trigger selection
-
     bool rejection = true;
     // loop over all triggers
     for (int i = 0; i < trig_n && rejection; i++) {
@@ -715,8 +724,10 @@ void Analysis::Loop()
       // loop over triggers which are accepted
       for (vector<string>::const_iterator it = fTrigger.begin(); 
 	   it != fTrigger.end(); it++) {
-	if (trigger.Contains(it->c_str()) && trig_HLTprescale[i] == 1) {
-	  rejection = false;
+	if (trigger.Contains(it->c_str())) {
+	  // OK, trigger found
+	  if (!fForceUnprescaledTriggers || trig_HLTprescale[i] == 1)
+	    rejection = false;
 	  break;
 	}
       }
@@ -834,8 +845,10 @@ void Analysis::Loop()
 	// loop over triggers which are accepted
 	for (vector<string>::const_iterator it = fTrigger.begin(); 
 	     it != fTrigger.end(); it++) {
-	  if (trigger.Contains(it->c_str()) && trig_HLTprescale[i] == 1) {
-	    matched++;
+	  if (trigger.Contains(it->c_str())) {
+	    // OK, trigger found
+	    if (!fForceUnprescaledTriggers || trig_HLTprescale[i] == 1)
+	      matched++;
 	  }
 	}
       }
@@ -1523,8 +1536,9 @@ void Analysis::Fill(const char * name, double value)
 void Analysis::Fill(const char * name, const char * bin)
 {
   TH1D * h = histo[name];
-  if (h != 0)
+  if (h != 0) {
     h->Fill(bin, global_weight);
+  }
   else {
     THROW(std::string("Histogram \"") + name + std::string("\" not existing. Did you misspell or forgot to create?"));
   }
