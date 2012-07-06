@@ -2,6 +2,8 @@
 HOST=`uname -n`
 echo "job_starter running on host $HOST"
 echo "Current working dir is $PWD"
+echo "Available disk space:"
+df -h .
 echo "Current directory contents:"
 ls -l
 EXE=$1
