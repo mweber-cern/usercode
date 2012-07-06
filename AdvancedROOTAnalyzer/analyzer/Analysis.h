@@ -36,6 +36,7 @@ protected:
   // configuration options
   bool      fFill;      // fill output tree?
   string    fInputType; // type of input data
+  string    fSample;    // the sample name
   string    fAnalysisType; // type of analysis to be performed
   Long64_t  fMaxEvents; // max events to process
   Long64_t  fMaxTreeSize; // maximum tree size (output)
@@ -52,6 +53,7 @@ protected:
   string    fFakeRateMethod; // fake rate method, "lastbin" or "zero"
   Int_t     fFakeRateDimensions; // number of dimensions for fake rate calculation
   vector<string> fTrigger; // trigger selection
+  bool      fForceUnprescaledTriggers; // Force unprescaled triggers
 
   // cuts for T/L ratio
   Double_t fTL_met_max;
