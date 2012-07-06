@@ -16,16 +16,25 @@ using namespace std;
 
 int main(int argc, char *argv[]) 
 {
-  if (argc != 3 && argc != 6) {
-    cout << "Usage: quickDraw path drawstring [nbins xmin xmax]" << endl;
+  if (argc != 3 && argc != 4 && argc != 7) {
+    cout << "Usage: quickDraw path drawstring [selection [nbins xmin xmax]]" << endl;
     cout << "       will create a file histogram.pdf from the given files" << endl 
 	 << endl;
     cout << "path           points to a directory containing ROOT files" << endl;
     cout << "drawstring     is a string usable in TTree::Draw()" << endl;
+    cout << "selection      e.g. (muo_n>0)&&(jet_n>0) or 1. if no selection" << endl;
     cout << "nbins          number of bins in histogram" << endl;
     cout << "xmin           low x edge of histogram" << endl;
     cout << "xmax           high x edge of histogram" << endl;
-    cout << "" << endl;
+    cout << endl;
+    cout << "Example: quickDraw ~/data \"muo_pt[0]\" \"(jet_n>2)\" 100 0 1000" << endl;
+    cout << "          will draw muo_pt of the leading muon (index 0) for all events" << endl;
+    cout << "          that contain at least three jets in a histogram with 100 bins," << endl;
+    cout << "          ranging from 0 to 1000 GeV" << endl;
+    cout << endl;
+    cout << "Example: quickDraw ~/data vtx_n global_weight" << endl;
+    cout << "         will draw vtx_n for all events in an automatically binned histogram " << endl;
+    cout << "         The histogram weight will be taken from the leaf global_weight for each event" << endl;
     exit (1);
   }
   // Loop over all files in directory <path> and fill
@@ -83,17 +92,21 @@ int main(int argc, char *argv[])
   Int_t nbins = 200;
   double xmin = 0;
   double xmax = 1;
-  if (argc == 6) {
-    nbins = atoi(argv[3]);
-    xmin = atof(argv[4]);
-    xmax = atof(argv[5]);
+  if (argc == 7) {
+    nbins = atoi(argv[4]);
+    xmin = atof(argv[5]);
+    xmax = atof(argv[6]);
   }
   TH1D * h1 = new TH1D("h1", argv[2], nbins, xmin, xmax);
-  if (argc == 3) {
+  if (argc < 5) {
     h1->SetBit(TH1::kCanRebin);
   }
+
+  const char * selection = "1.";
+  if (argc >= 4)
+    selection = argv[3];
   
-  chain->Draw(Form("%s>>h1", argv[2]));
+  chain->Draw(Form("%s>>h1", argv[2]), selection);
   h1->Draw();
   c1->Print("histo.pdf");
   f->Write();
