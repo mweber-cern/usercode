@@ -167,13 +167,16 @@ void stat(Double_t low, Double_t up)
 	 nTotal-nTotSignal, TMath::Sqrt(nTotErrBack));
   printf("===============================================================================\n");
   // total, under & overflow mc
-  Int_t   hindex = FindFirstHisto();
   Double_t uflow  = 0;
   Double_t oflow  = 0;
-  if (hindex >= 0) {
-    uflow      = gStack[gPadNr][hindex]->GetBinContent(0);
-    Int_t obin = gStack[gPadNr][hindex]->GetNbinsX()+1;
-    oflow      = gStack[gPadNr][hindex]->GetBinContent(obin);
+  for (Int_t k = 0; k < gMaxProcess-1; k++) {
+    Int_t i = gOrder[gPadNr][k];
+    if (gHisto[gPadNr][i] == 0)
+      continue;
+    // sum up stacked and unstacked histograms
+    uflow      += gHisto[gPadNr][i]->GetBinContent(0);
+    Int_t obin  = gHisto[gPadNr][i]->GetNbinsX()+1;
+    oflow      += gHisto[gPadNr][i]->GetBinContent(obin);
   }
   printf("total mc:         %12.3f +/- %10.3f (u: %7.3f) (o: %7.3f)   Lumi:\n", 
 	 nTotal, TMath::Sqrt(nTotErrSig+nTotErrBack), uflow, oflow);
