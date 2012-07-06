@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
   // read configuration file
   TEnv cfgFile(argv[1]);
 
-  INFO("# analyzer: Using configuration file: " << argv[1]);
+  INFO("Using configuration file: " << argv[1]);
 
   // configure values from config file
   gLogLevel                           = cfgFile.GetValue("LogLevel", 3);
@@ -84,7 +84,7 @@ int main(int argc, char *argv[])
   delete basepath;
 
   // create output file
-  INFO("# analyzer: Creating output file and cloning tree")
+  INFO("Creating output file and cloning tree")
   TFile * outFile = new TFile(outputFileName, "RECREATE");
   if (outFile == 0 || !outFile->IsOpen()) {
     ERROR("Could not open output file " << outputFileName);
@@ -125,19 +125,19 @@ int main(int argc, char *argv[])
 
   // mem info
   gSystem->GetProcInfo(&info);
-  INFO("# analyzer: resident mem (MB) : " << info.fMemResident/1000.);
-  INFO("# analyzer: virtual  mem (MB) : " << info.fMemVirtual/1000.);
+  INFO("resident mem (MB) : " << info.fMemResident/1000.);
+  INFO("virtual  mem (MB) : " << info.fMemVirtual/1000.);
 
   // start loop
-  INFO("# analyzer: starting event loop");
+  INFO("starting event loop");
   try {
     analysis->Loop();
   }
   CATCH;
-  INFO("# analyzer: end of loop ");
+  INFO("end of loop");
 
   // save data in file
-  INFO("# analyzer: Saving data to file and closing...");
+  INFO("Saving data to file and closing...");
   // get currrent file - needed because of output tree spanning different
   // files, via setting TTree::SetMaxTreeSize
   outFile = outTree->GetCurrentFile();
@@ -147,17 +147,17 @@ int main(int argc, char *argv[])
   // no, we do not need to delete the objects in the file, this is done on the file delete... 
   
   // delete analysis object
-  INFO("# analyzer: Deleting analysis");
+  INFO("Deleting analysis");
   delete analysis;
 
   // time and memory info
   timer.Stop();
   gSystem->GetProcInfo(&info);
   INFO("");
-  INFO("# analyzer: real time (s)     : " << timer.RealTime());
-  INFO("# analyzer: CPU time (s)      : " << timer.CpuTime()); 
-  INFO("# analyzer: resident mem (MB) : " << info.fMemResident/1000.);
-  INFO("# analyzer: virtual  mem (MB) : " << info.fMemVirtual/1000.);
+  INFO("real time (s)     : " << timer.RealTime());
+  INFO("CPU time (s)      : " << timer.CpuTime()); 
+  INFO("resident mem (MB) : " << info.fMemResident/1000.);
+  INFO("virtual  mem (MB) : " << info.fMemVirtual/1000.);
   INFO("");
 
   // info at end of program
