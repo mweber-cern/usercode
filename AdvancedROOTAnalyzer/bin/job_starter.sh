@@ -6,6 +6,9 @@ echo "Available disk space:"
 df -h .
 echo "Current directory contents:"
 ls -l
+(( SLEEP= $RANDOM % 15 ))
+echo "Sleeping for $SLEEP seconds..."
+sleep $SLEEP
 EXE=$1
 shift
 ARGS=$*
