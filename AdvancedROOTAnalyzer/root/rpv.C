@@ -8,6 +8,8 @@
 #include "TFile.h"
 #include "TLatex.h"
 #include "TF1.h"
+#include "TH2D.h"
+#include "TH1D.h"
 
 #endif // __CINT__
 
@@ -63,7 +65,7 @@ void running_lambda_prime_211()
 }
 
 Bool_t read_xsfile(const char * fname, int nMax, 
-		   int & p1, int & p2, double & lambda, double & sqrts,
+		   int p1, int p2, double & lambda, double & sqrts,
 		   int & n, double m[], double xs_lo[], double xs_nlo[])
 {
   FILE * xsfile = fopen(fname, "r");
@@ -84,8 +86,9 @@ Bool_t read_xsfile(const char * fname, int nMax,
     }
     if (buffer[0] == '#')
       continue;
+    int i1, i2;
     if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
-	       & p1, & p2,
+	       & i1, & i2,
 	       & sqrts,
 	       & mS, & Mlr, & lambda,
 	       & LO, & NLO, & k,
@@ -94,17 +97,19 @@ Bool_t read_xsfile(const char * fname, int nMax,
       cerr << "Error in format in this line: " << buffer << endl;
       continue;
     }
-    xs_lo[n] = LO_tot;
-    xs_nlo[n] = NLO_tot;
-    m[n] = mS;
-    n++;
+    if ((TMath::Abs(i1) == TMath::Abs(p1) && TMath::Abs(i2) == TMath::Abs(p2)) ||
+	(TMath::Abs(i1) == TMath::Abs(p2) && TMath::Abs(i2) == TMath::Abs(p1))) {
+      xs_lo[n] = LO_tot;
+      xs_nlo[n] = NLO_tot;
+      m[n] = mS;
+      n++;
+    }
   }
   return kTRUE;
 }
 
 void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
 {
-  int p1, p2;
   double lambda, sqrts;
   const int nMax = 1000;
   double m[nMax];
@@ -116,6 +121,8 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
   double m_min = 1E9;
   double m_max = 0;
   char quarks[6] = { 'd', 'u', 's', 'c', 'b', 't' };
+  int p1, p2;
+  p1 = 1; p2 = 2; // ud 
   if (!read_xsfile(fname, nMax, p1, p2, lambda, sqrts, n, m, xs_lo, xs_nlo)) { 
     cerr << "Could not read file " << fname << endl;
     return;
@@ -135,8 +142,8 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
   gPad->SetLogy();
   TH2F * hframe = new TH2F("hframe", "frame", 1, m_min, m_max, 1, xs_min, xs_max);
   setopt(hframe);
-  hframe->SetXTitle("m(#bf{#tilde{#mu}}) [GeV]");
-  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}}) [pb]", 
+  hframe->SetXTitle("m(#bf{#tilde{#mu}^{#pm}}) [GeV]");
+  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}^{#pm}}) [pb]", 
 			 quarks[TMath::Abs(p1)-1], quarks[TMath::Abs(p2)-1]));
   hframe->Draw();
   
@@ -154,7 +161,7 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
   gr_nlo->SetLineWidth(3.);
   gr_nlo->Draw("lsame");
 
-  TLegend * leg = new TLegend(0.6, 0.76, 0.95, 0.91, Form("#sqrt{s} = %.0f TeV, #lambda'_{211} = %.3f", sqrts/1000., lambda));
+  TLegend * leg = new TLegend(0.6, 0.76, 0.93, 0.91, Form("#sqrt{s} = %.0f TeV, #lambda'_{211} = %.3f", sqrts/1000., lambda));
   setopt(leg);
   leg->AddEntry(gr_lo, "LO", "l");
   leg->AddEntry(gr_nlo, "NLO", "l");
@@ -461,7 +468,7 @@ void compute_energy_resolution()
   f1->SetLineColor(kBlue);
   f1->SetLineWidth(2.);
   f1->Draw("same");
-  double a = f1->GetParameter(0); 
+  // double a = f1->GetParameter(0); 
   double b = f1->GetParameter(1);
   double c = f1->GetParameter(2);
   double minvalue = -b/(2*c);
@@ -513,3 +520,35 @@ void mc_comparison()
   plotlinlog("check_njets");
 }
 
+void limitplot(const char * fname = "XscLimitsAndErrorsRooStats.txt")
+{
+  gROOT->SetBatch(1);
+  TH1D * h1 = new TH1D("h1", "sigma", 100, 0., 3.);
+
+  FILE * limitfile = fopen(fname, "r");
+  if (limitfile == 0) {
+    ERROR("could not open file " << fname);
+    return;
+  }
+  char buffer[256];
+  double m0, m12;
+  double observed, expected;
+  double onesigmaup, onesigmadown;
+  double twosigmaup, twosigmadown;
+  while (fgets(buffer, 256, limitfile)) {
+    if (buffer[0] == '#')
+      continue;
+    if (sscanf(buffer, "%lf & %lf & %lf & %lf & %lf & %lf & %lf & %lf \\", 
+	       & m0, & m12,
+	       & observed, & expected, 
+	       & onesigmaup, & onesigmadown,
+	       & twosigmaup, & twosigmadown
+	  ) != 8) {
+      cerr << "Error in format in this line: " << buffer << endl;
+      continue;
+    }
+    h1->Fill((observed-expected)/(onesigmaup-expected));
+  }
+  h1->Draw();
+  gPad->Print("limit.pdf");
+}
