@@ -2,16 +2,21 @@
 
 LOGFILE=/user/mweber/systematics.log
 
-#Suffix determines which jobs to start: 
-# "" (empty)    : Default job start
-# "_singlefake" : Singlefake job start
-# "_doublefake" : Doublefake job start
-SUFFIX="$1"
+usage()
+{
+    cat <<EOF
+Usage: `basename $0` action [suffix]
 
-# Second argument determines if jobs are to be submit or collected
-# "-s" means submit jobs
-# "-c" means collect jobs
-ACTION="$2"
+The suffix determines which jobs to start: 
+"" (empty)    : Default job start
+"_singlefake" : Singlefake job start
+"_doublefake" : Doublefake job start
+
+The second argument (action) determines if jobs are to be submit or collected
+"-s" means submit jobs
+"-c" means collect jobs
+EOF
+}
 
 newroot()
 {
@@ -44,16 +49,32 @@ mycollect()
 
 action()
 {
-    echo "ACTION: ${ACTION}"
     if [[ "${ACTION}" == "-s" ]] ; then
 	submit.py $*
     elif [[ "${ACTION}" == "-c" ]] ; then
 	mycollect $*
-    else
-	echo "You must specify -s (submit) or -c (collect) as second argument"
     fi
 }
 
+
+# Require two arguments
+if [[ ${#*} -ne 2 || "$1" == "-h" || "$1" == "--help"  ]] ; then
+    usage
+    exit 1
+fi
+
+ACTION="$1"
+SUFFIX="$2"
+
+# Check argument validity
+if [[ "${ACTION}" != "-s" && "${ACTION}" != "-c" ]] ; then
+    usage
+    exit 1
+fi
+if [[ "${SUFFIX}" != "" && ${SUFFIX} != "_singlefake" && ${SUFFIX} != "_doublefake" ]]; then
+    usage
+    exit 1
+fi
 ## original default submission
 #for name in default13
 #do
@@ -70,13 +91,13 @@ action()
 #    action -a ${TYPE} ${TYPE} 
 #done
 
-# systematics for a possible jet cut bias
-for jetptmin in 50 60 80
-do
-    TYPE=jetptmin_${jetptmin}${SUFFIX}
-    echo "Start submitting ${TYPE}" >> ${LOGFILE}
-    action -a ${TYPE} ${TYPE}
-done
+## systematics for a possible jet cut bias
+#for jetptmin in 50 60 80
+#do
+#    TYPE=jetptmin_${jetptmin}${SUFFIX}
+#    echo "Start submitting ${TYPE}" >> ${LOGFILE}
+#    action -a ${TYPE} ${TYPE}
+#done
 
 # systematics for a possible bias due to Z peak scaling / Z modelling
 # One does not need to rerun the analysis for this.
@@ -88,18 +109,23 @@ done
 #    action -a ${TYPE} ${TYPE}
 #done
 
-# systematics for values outside histogram range
-for fakeratemethod in zero
-do 
-    TYPE=fakeratemethod_${fakeratemethod}${SUFFIX}
-    echo "Start submitting ${TYPE}" >> ${LOGFILE}
-    action -a ${TYPE} ${TYPE}
-done
-
-## systematics for a possible trigger bias
-#for trigger in singlemu mu8_jet40
-#do
-#    TYPE=triggerbias_${trigger}${SUFFIX}
+## systematics for values outside histogram range
+#for fakeratemethod in zero
+#do 
+#    TYPE=fakeratemethod_${fakeratemethod}${SUFFIX}
 #    echo "Start submitting ${TYPE}" >> ${LOGFILE}
-#    action -a ${TYPE} ${TYPE} ${trigger}
+#    action -a ${TYPE} ${TYPE}
 #done
+
+# systematics for a possible trigger bias
+for trigger in singlemu mu8_jet40
+do
+    TYPE=triggerbias_${trigger}${SUFFIX}
+    echo "Start submitting ${TYPE}" >> ${LOGFILE}
+    if [[ ${SUFFIX} == "" ]] ; then
+	JOBGROUP="${trigger}"
+    else
+	JOBGROUP=""
+    fi
+    action -a ${TYPE} ${TYPE} ${JOBGROUP}
+done
