@@ -847,8 +847,7 @@ void Analysis::Loop()
 	     it != fTrigger.end(); it++) {
 	  if (trigger.Contains(it->c_str())) {
 	    // OK, trigger found
-	    if (!fForceUnprescaledTriggers || trig_HLTprescale[i] == 1)
-	      matched++;
+	    matched++;
 	  }
 	}
       }

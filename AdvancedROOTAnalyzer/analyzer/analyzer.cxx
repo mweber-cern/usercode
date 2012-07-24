@@ -119,7 +119,7 @@ int main(int argc, char *argv[])
   }
   CATCH;
   if (analysis == 0) {
-    ERROR("Could not create analysis class - out of memory?");
+    ERROR("Could not create analysis class - Either exception catched or out of memory");
     return E_NO_ANALYSIS;
   }
 
