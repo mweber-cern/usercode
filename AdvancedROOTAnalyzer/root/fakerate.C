@@ -358,6 +358,8 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
     hRatio2->SetTitleOffset(1.5, "Y");
     hRatio2->SetTitleOffset(2.5, "Z");
     hRatio2->Draw("lego2");
+    hRatio2->SetMaximum(1.0);
+    gPad->Print("tlratio2d.pdf");
   }
 
   // compute 1D ratio
@@ -577,6 +579,8 @@ void tightlooseplots(int start = 1, int end = 5)
 	min(0.1);
 	arrow(50.);
 	legend(1e-3);
+	pprint();
+
 	cd(2);
 	plot("nTL_ht");
 	max(1e6);
@@ -584,6 +588,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	logy();
 	arrow(50.);
 	legend(1e-3);
+	pprint();
 	print("tightloose_1.pdf");
 	break;
       case 2:
@@ -595,6 +600,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	max(1e6);
 	arrow(15.);
 	legend(1e-3);
+	pprint();
 
 	cd(2);
 	plot("nTL_jetpt");
@@ -604,6 +610,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	zoom(0, 700);
 	arrow(40.);
 	legend(1e-3);
+	pprint();
 	print("tightloose_2.pdf");
 	break;
       case 3:
@@ -614,6 +621,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	min(0.1);
 	arrow(1.);
 	legend(1e-3, 0);
+	pprint();
 
 	cd(2);
 	plot("nTL_mt");
@@ -621,6 +629,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	liny();
 	arrow(40.);
 	legend(1e-3);
+	pprint();
 	print("tightloose_3.pdf");  
 	break;
       case 4:
@@ -633,6 +642,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	zoom(0, 200);
 	min(0.1);
 	legend(1e-3);
+	pprint();
 	
 	cd(2);
 	plot("nTL_nloose");
@@ -641,6 +651,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	arrow(0.5);
 	arrow(1.5);
 	legend(1e-3);
+	pprint();
 	print("tightloose_4.pdf");  
 	break;
 
@@ -650,6 +661,7 @@ void tightlooseplots(int start = 1, int end = 5)
 	liny();
 	min(0.1);
 	legend(1e-3);
+	pprint();
 	print("tightloose_5.pdf");
 	break;
     }
@@ -749,6 +761,14 @@ void fake_estimate(const char * sel, const char * hname, double & N_W, double & 
   INFO("W+jets events: " << N_W);
 }
 
+void fake_estimate(const char * sel, const char * hname)
+{
+  double N_W;
+  double N_QCD;
+  
+  fake_estimate(sel, hname, N_W, N_QCD);
+}
+
 struct syst_struct {
   const char * sel;
   const char * cfg;
@@ -764,6 +784,7 @@ void fakerate_systematics(int istart = 0, int iend = 999)
   double N_QCD_ref;
 
   // get default values
+  setup("../config/plot.cfg");
   fake_estimate("default13", hname, N_W_ref, N_QCD_ref);
 
   // list of systematics
@@ -780,8 +801,8 @@ void fakerate_systematics(int istart = 0, int iend = 999)
 
     { "fakeratemethod_zero", "" },
     
-    { "triggerbias_singlemu", "singlemu" },
-    { "triggerbias_mu8_jet40", "mu8_jet40" }
+    { "triggerbias_singlemu", "_singlemu" },
+    { "triggerbias_mu8_jet40", "_mu8_jet40" }
   };
 
   // event counters
