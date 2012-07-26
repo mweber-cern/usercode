@@ -1,6 +1,0 @@
-*.root
-*.d
-analyzer
-*.pyc
-Dict.*
-CutFlow.*
