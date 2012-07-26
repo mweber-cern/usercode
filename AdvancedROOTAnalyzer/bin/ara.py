@@ -230,7 +230,7 @@ def wait_for_jobs(njobs):
                 jobcount += 1
         # if the maximal job count is exceeded, sleep for a while
         if jobcount >= njobs:
-            print "Reached " + str(njobs) + " jobs, sleeping for 15 s..."
-            time.sleep(15)
+            print "Reached " + str(njobs) + " jobs, sleeping for 30 s..."
+            time.sleep(30)
         else:
             wait = False

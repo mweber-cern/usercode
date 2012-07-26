@@ -5,6 +5,7 @@ import ConfigParser
 import optparse
 import ara
 import shutil
+import time
 
 ######################################################################
 # misc helper functions
@@ -130,6 +131,8 @@ def submit(jobgroup, job, period):
         outbox = outputFile # ",".join((outputFile, "Weight3D.root"))
         submit_condor_with_wrapper(executable, cfgFileNameBase,
                                    inbox, outbox, jobName)
+
+        time.sleep(3)
 
         # Next file
         n += 1
