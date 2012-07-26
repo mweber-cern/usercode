@@ -7,14 +7,14 @@ usage()
     cat <<EOF
 Usage: `basename $0` action [suffix]
 
-The suffix determines which jobs to start: 
+The action determines if jobs are to be submit or collected
+"-s" means submit jobs
+"-c" means collect jobs
+
+The suffix determines which jobs to start:
 "" (empty)    : Default job start
 "_singlefake" : Singlefake job start
 "_doublefake" : Doublefake job start
-
-The second argument (action) determines if jobs are to be submit or collected
-"-s" means submit jobs
-"-c" means collect jobs
 EOF
 }
 
