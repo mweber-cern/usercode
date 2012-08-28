@@ -37,7 +37,7 @@ def submit_condor_job(executable, arguments, inbox, outbox, jobname):
     repMap["stdout"] = stdout
     repMap["stderr"] = stderr
     repMap["log"] = "condor.log"
-    repMap["outputfiles"] = ",".join((stderr, stdout, outbox))
+    repMap["outputfiles"] = outbox
     content = condor_template % repMap
     jobfile = open(cfgFile, "w")
     jobfile.write(content)
@@ -127,8 +127,8 @@ def submit(jobgroup, job, period):
         arguments = cfgFileNameBase
         # need to go into this directory - submit job from there
         os.chdir(myDir)
-        inbox = cfgFileName #",".join((cfgFileName, "Weight3D.root"))
-        outbox = outputFile # ",".join((outputFile, "Weight3D.root"))
+        inbox = cfgFileName
+        outbox = outputFile
         submit_condor_with_wrapper(executable, cfgFileNameBase,
                                    inbox, outbox, jobName)
 

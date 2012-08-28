@@ -9,6 +9,10 @@ ls -l
 #(( SLEEP= $RANDOM % 15 ))
 #echo "Sleeping for $SLEEP seconds..."
 #sleep $SLEEP
+#echo "LD_LIBRARY_PATH contents:"
+#echo $LD_LIBRARY_PATH | tr ':' '\n'
+#echo "Environment:"
+#env
 EXE=$1
 shift
 ARGS=$*
