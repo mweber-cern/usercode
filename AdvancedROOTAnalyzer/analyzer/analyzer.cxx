@@ -42,46 +42,41 @@ int main(int argc, char *argv[])
   INFO("");
 
   // check command line arguments
-  if (argc != 2) {
-    ERROR("Usage: analyzer configfile ");
+  if (argc < 5) {
+    ERROR("Usage: analyzer jobname outputfile.root analyzer.cfg inputfile [inputfile ... ]");
     return E_WRONG_PARAMS;
   }
 
-  // read configuration file
-  TEnv cfgFile(argv[1]);
-
-  INFO("Using configuration file: " << argv[1]);
-
-  // configure values from config file
-  gLogLevel                           = cfgFile.GetValue("LogLevel", 3);
-  string inputFiles                   = cfgFile.GetValue("InputFiles", "in.root");
-  const char * outputFileName         = cfgFile.GetValue("OutputFileName", "out.root");
+  // read configuration file, configure values from command line
+  INFO("Using configuration file: " << argv[3]);
+  TEnv cfgFile(argv[3]);
+  gLogLevel = cfgFile.GetValue("LogLevel", 3);
+  cfgFile.SetValue("Sample", argv[1]);
+  const char * outputFileName = argv[2];
 
   TChain * chain = new TChain("ACSkimAnalysis/allData");
-  // try to find out if inputfiles is a directory.
-  Text_t * basepath  = gSystem->ExpandPathName(inputFiles.c_str());
-  void   * dirhandle = gSystem->OpenDirectory(basepath);
-  if (dirhandle != 0) {
-    const Text_t * basename;
-    while ((basename = gSystem->GetDirEntry(dirhandle))) {
-      // Skip non-ROOT files
-      if (!strstr(basename, ".root"))
-	continue;
-      string fullname = basepath + string("/") + basename;
-      INFO("Adding file " << fullname);
-      chain->Add(fullname.c_str());
+  for (int n = 4; n < argc; n++) {
+    // try to find out if inputfile is a directory.
+    Text_t * basepath  = gSystem->ExpandPathName(argv[n]);
+    void   * dirhandle = gSystem->OpenDirectory(basepath);
+    if (dirhandle != 0) {
+      const Text_t * basename;
+      while ((basename = gSystem->GetDirEntry(dirhandle))) {
+	// Skip non-ROOT files
+	if (!strstr(basename, ".root"))
+	  continue;
+	string fullname = basepath + string("/") + basename;
+	INFO("Adding file " << fullname);
+	chain->Add(fullname.c_str());
+      }
     }
-  }
-  else {
-    // OK, this is not a directory, add the given file(s)
-    vector<string> files;
-    split(inputFiles, ' ', files);
-    for (vector<string>::const_iterator it = files.begin(); it != files.end(); it++) {
-      INFO("Adding file " << *it);
-      chain->Add(it->c_str());
+    else {
+      // OK, this is not a directory, add the given file(s)
+      INFO("Adding file " << argv[n]);
+      chain->Add(argv[n]);
     }
+    delete basepath;
   }
-  delete basepath;
 
   // create output file
   INFO("Creating output file and cloning tree")

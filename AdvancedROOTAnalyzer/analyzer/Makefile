@@ -33,17 +33,26 @@ CXXFLAGS      = -O2 -Wall -fPIC -fsignaling-nans -g # -DNDEBUG # -pg for gprof
 CXXFLAGS     += $(EXTINCDIR)   # external header files should be here
 CXXFLAGS     += $(ROOTCFLAGS)
 
+# -DVERSION=88
+
 LD            = g++
 LDFLAGS       = -O2 -fsignaling-nans -g # -pg for gprof
 LDFLAGS      += $(ROOTGLIBS)
 LDFLAGS      += $(EXTLIBS)
 
-SOURCES       = $(wildcard *.cxx)
-HEADERS       = $(SOURCES:.cxx=.h)
-OBJECTS       = $(SOURCES:.cxx=.o)
-DEPENDS       = $(SOURCES:.cxx=.d)
+SOURCES_COMMON	= $(shell ls *.cxx | grep -v _v[0-9][0-9].cxx )
+SOURCES_78	= $(shell ls *_v78.cxx )
+SOURCES_88	= $(shell ls *_v88.cxx )
+HEADERS_COMMON  = $(SOURCES_COMMON:.cxx=.h)
+HEADERS_78     	= $(SOURCES_78:.cxx=.h)
+HEADERS_88     	= $(SOURCES_88:.cxx=.h)
+OBJECTS_78	= $(SOURCES_78:.cxx=.o) $(SOURCES_COMMON:.cxx=_v78.o)
+OBJECTS_88	= $(SOURCES_88:.cxx=.o) $(SOURCES_COMMON:.cxx=_v88.o)
+DEPENDS_78	= $(SOURCES_78:.cxx=.d) $(SOURCES_COMMON:.cxx=_v78.d)
+DEPENDS_88	= $(SOURCES_88:.cxx=.d) $(SOURCES_COMMON:.cxx=_v88.d)
 
-DICT	      = Dict
+DICT_78	      = Dict_v78
+DICT_88	      = Dict_v88
 
 CUTFLOW	      = CutFlow
 
@@ -52,13 +61,18 @@ DATE	     := $(shell date "+%F")
 ######################################################################
 # default targets
 
-all:            $(PROGRAM)
+.PHONY:		all clean distclean tarball
+
+all:            $(PROGRAM)_v78 $(PROGRAM)_v88
 
 clean:
-		@rm -f $(OBJECTS) $(PROGRAM) $(DICT).* $(CUTFLOW).* $(DEPENDS)
+		rm -f $(OBJECTS_COMMON) $(OBJECTS_78) $(OBJECTS_88) \
+		 $(PROGRAM)_v78 $(PROGRAM)_v88 \
+		 $(DEPENDS_78) $(DEPENDS_88) \
+		 $(DICT_78).* $(DICT_88).* $(CUTFLOW).*
 
 distclean:      clean
-		@rm -f *~ core *.def *.exp *.root *.ps .def gmon.out
+		@rm -f *.o *.d *~ core *.def *.exp *.root *.ps .def gmon.out
 
 tarball:
 		tar cvjf $(PROGRAM)-$(DATE).tar.bz2 Makefile *.h *.cxx
@@ -68,46 +82,66 @@ tarball:
 
 .SUFFIXES: .cxx .$(ExeSrcSuf) .C .f .o .so .d
 
-.cxx.o:
-	$(CXX) $(CXXFLAGS) -c $<
+%_v78.o: %.cxx 
+	$(CXX) $(CXXFLAGS) -DVERSION=78 -c $< -o $@
 
-.cpp.o:
-	$(CXX) $(CXXFLAGS) -c $<
+%_v78.o: %_v78.cxx 
+	$(CXX) $(CXXFLAGS) -DVERSION=78 -c $< -o $@
 
-.cc.o:
-	$(CXX) $(CXXFLAGS) -c $<
+%_v78.o: %_v78.C
+	$(CXX) $(CXXFLAGS) -DVERSION=78 -c $<
 
-.C.o:
-	$(CXX) $(CXXFLAGS) -c $<
+%_v88.o: %.cxx 
+	$(CXX) $(CXXFLAGS) -DVERSION=88 -c $< -o $@
 
-.f.o:
+%_v88.o: %_v88.cxx 
+	$(CXX) $(CXXFLAGS) -DVERSION=88 -c $< -o $@
+
+%_v88.o: %_v88.C
+	$(CXX) $(CXXFLAGS) -DVERSION=88 -c $<
+
+%.o: %.f
 	$(FC) $(FCFLAGS) -c $< -o $@
 
-.cpp.d:
-	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) $< > $@'
+%_v78.d: %.cxx
+	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=78 $< > $@'
 
-.cxx.d:
-	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) $< > $@'
+%_v78.d: %_v78.cxx
+	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=78 $< > $@'
 
-.cc.d:
-	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) $< > $@'
+%_v88.d: %_v88.cxx
+	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=88 $< > $@'
 
-include $(DEPENDS)
+%_v88.d: %.cxx
+	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=88 $< > $@'
+
+include $(DEPENDS_78) $(DEPENDS_88)
+
+######################################################################
+# special procedures
 
 ######################################################################
 # ROOT dictionary
 
-$(DICT).C: $(HEADERS) LinkDef.h
+$(DICT_78).C: $(HEADERS_COMMON) $(HEADERS_78) LinkDef.h
 	@echo "Generating dictionary $(DICT)..."
-	rootcint -f $@ -c $(EXTINCDIR) $+
+	rootcint -f $@ -c $(EXTINCDIR) -DVERSION=78 $+
 
-$(CUTFLOW).C: $(SOURCES)
+$(DICT_88).C: $(HEADERS_COMMON) $(HEADERS_88) LinkDef.h
+	@echo "Generating dictionary $(DICT)..."
+	rootcint -f $@ -c $(EXTINCDIR) -DVERSION=88 $+
+
+$(CUTFLOW).C: Analysis.cxx
 	@echo "Generating cutflow..."
 	../bin/gencutflow.py -f $@ $+
 
 ######################################################################
 # targets
 
-$(PROGRAM):  $(OBJECTS) $(DICT).o $(CUTFLOW).o
+$(PROGRAM)_v78:  $(OBJECTS_COMMON) $(OBJECTS_78) $(DICT_78).o $(CUTFLOW).o
+	$(LD) $(LDFLAGS) $+ -o $@
+		@echo "$@ done"
+
+$(PROGRAM)_v88:  $(OBJECTS_COMMON) $(OBJECTS_88) $(DICT_88).o $(CUTFLOW).o
 	$(LD) $(LDFLAGS) $+ -o $@
 		@echo "$@ done"

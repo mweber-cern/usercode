@@ -16,8 +16,14 @@
 #include <set>
 #include <map>
 
-#include "TreeContent.h"
-#include "LumiReweightingStandAlone.h"
+#if VERSION == 78
+#include "TreeContent_v78.h"
+#include "LumiReweightingStandAlone_v78.h"
+#elif VERSION == 88
+#include "TreeContent_v88.h"
+#include "LumiReweightingStandAlone_v88.h"
+#endif
+
 
 using namespace std;
 
@@ -54,6 +60,7 @@ protected:
   Int_t     fFakeRateDimensions; // number of dimensions for fake rate calculation
   vector<string> fTrigger; // trigger selection
   bool      fForceUnprescaledTriggers; // Force unprescaled triggers
+  string    fLumiRanges; // lumi ranges (JSON file) for data processing
 
   // cuts for T/L ratio
   Double_t fTL_met_max;
@@ -66,6 +73,7 @@ protected:
   Double_t fTL_mupt_min;
   Double_t fTL_jetdphi_min;
   Double_t fTL_mt_max;
+  Double_t fTL_njets_min;
 
   // values for smearing jet energies (JER)
   Double_t fJER_scale;
