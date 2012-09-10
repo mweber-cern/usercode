@@ -1,6 +1,6 @@
 *.root
 *.d
-analyzer
+analyzer_v??
 *.pyc
-Dict.*
+Dict_v??.*
 CutFlow.*
