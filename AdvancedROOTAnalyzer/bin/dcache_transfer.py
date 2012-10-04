@@ -38,7 +38,8 @@ completely transferred."""
 
     # get file names from Grid storage element
     print "Reading files from grid storage, please be patient..."
-    srmfiles = ara.uberftpls(args[0], True)
+    srcpath = ara.getUserStoragePath(args[0])
+    srmfiles = ara.uberftpls(srcpath, True)
     # get local file names
     print "Reading local file names and stats..."
     filelist = os.listdir(".")
@@ -83,11 +84,7 @@ completely transferred."""
         print "Use -f switch to delete files or remove files manually"
         return 1
 
-    user = ara.config.get('Grid', 'user')
-    se = ara.config.get('Grid', 'se')
-    sp = ara.config.get('Grid', 'sp')
-    srcpath = sp+'/'+user+'/'+args[0]+'/'
-    srcpath = se+srcpath.replace('//', '/')
+    srcpath=ara.config.get('Grid', 'se')+srcpath
     destpath = 'file:///'+os.getcwd()+'/'
     for filename in transferfiles:
         print filename
