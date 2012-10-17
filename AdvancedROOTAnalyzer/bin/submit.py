@@ -64,6 +64,7 @@ def submit_condor_with_wrapper(executable, arguments, inbox, outbox, jobname):
 
 def submit(jobgroup, job, period):
     global options
+    global inbox
 
     # read files from directory
     # call program and record both stderr and stdout
@@ -90,6 +91,14 @@ def submit(jobgroup, job, period):
         print "You must create this section and add entries to it"
         return False
 
+    # create directory
+    basedir = ara.config.get('Analysis', 'basedir').rstrip('/')
+    myDir = basedir + '/' + options.selection + '/' + period
+    os.system("mkdir -p " + myDir)
+
+    # need to go into this directory - submit job from there, output will get here
+    os.chdir(myDir)
+
     # determine file splitting
     print 'Found', len(filelist), 'files'
     list_of_lists = ara.split_in_jobs(filelist, options.nsplit)
@@ -97,47 +106,64 @@ def submit(jobgroup, job, period):
     for files in list_of_lists:
         print "Job #", n, ": ", len(files), " files"
 
-        # read template
-        cfgPath = os.environ['ARASYS'] + '/config'
-        cfgName = 'analyzer_' + options.analysiscfg + '.cfg'
-        cfgTemplateFile = open(cfgPath + '/' + cfgName)
-        cfg = cfgTemplateFile.read()
-        repMap = {}
-        repMap["sample"] = job
-        repMap["inputfile"] = " ".join(files)
-        outputFile = job + '_' + str(n) + '.root'
-        repMap["outputfile"] = outputFile
-        repMap["type"] = getType(job)
-        repMap["configPath"] = cfgPath
-        content = cfg % repMap
+        executable = './analyzer'
+        jobName = job + '_' + str(n) 
+        outputFile = jobName + '.root'
+        outbox = [ outputFile ]
+        arguments = job + " " + outputFile + " analyzer.cfg " + " ".join(files)
 
-        # create a job configuration file
-        basedir = ara.config.get('Analysis', 'basedir')
-        # create directory
-        myDir = basedir + '/' + options.selection + '/' + period
-        os.system("mkdir -p " + myDir)
-        jobName = job + '_' + str(n)
-        cfgFileNameBase = job + '_' + str(n) + '.cfg'
-        cfgFileName = myDir + '/' + cfgFileNameBase
-        cfgFile = open(cfgFileName, "w")
-        cfgFile.write(content)
-        cfgFile.close()
+        submit_condor_with_wrapper(executable, arguments,
+                                   ",".join(inbox), ",".join(outbox), 
+                                   jobName)
 
-        executable = os.environ['ARASYS'] + '/bin/analyzer_' + options.selection
-        arguments = cfgFileNameBase
-        # need to go into this directory - submit job from there
-        os.chdir(myDir)
-        inbox = cfgFileName
-        outbox = outputFile
-        submit_condor_with_wrapper(executable, cfgFileNameBase,
-                                   inbox, outbox, jobName)
-
-        time.sleep(3)
+        time.sleep(1)
 
         # Next file
         n += 1
 
     return True
+
+######################################################################
+# setting up local files
+def setupInbox():
+    global inbox
+    inbox = []
+
+    # binary files
+    basedir = ara.config.get('Analysis', 'basedir').rstrip('/')
+    myDir = basedir + '/' + options.selection + '/bin'
+    os.system("mkdir -p " + myDir)
+
+    # copy executable in place
+    src = os.environ['ARASYS'] + '/analyzer/analyzer'
+    dest = myDir + '/analyzer'
+    shutil.copy(src, dest)
+    inbox.append(dest)
+
+    # setup configuration files
+    myDir = basedir + '/' + options.selection + '/config'
+    os.system("mkdir -p " + myDir)
+
+    # copy config file in place
+    src = os.environ['ARASYS'] + '/config/analyzer_' + options.analysiscfg + '.cfg'
+    dest = myDir + '/analyzer.cfg'
+    shutil.copy(src, dest)
+    inbox.append(dest)
+
+    # extract file names to be transferred from configuration file
+    cfgFile = open(dest)
+    cfg = cfgFile.read()
+    transferFiles = [ ]
+    for line in cfg.splitlines():
+        for token in ara.config.get('Analysis', 'transfertags').split(','):
+            if line.startswith(token+':'):
+                transferFiles.append(line.split(':')[1].strip())
+
+    for filename in transferFiles:
+        src = os.environ['ARASYS'] + '/config/' + filename
+        dest = myDir + '/' + filename
+        shutil.copy(src, dest)
+        inbox.append(dest)
 
 ######################################################################
 # main
@@ -215,10 +241,8 @@ will be submitted."""
     if len(args) >= 3:
         options.pattern = args[2]
 
-    # copy executable in place
-    src = os.environ['ARASYS'] + '/analyzer/analyzer'
-    dest = os.environ['ARASYS'] + '/bin/analyzer_' + options.selection
-    shutil.copy(src, dest)
+    # setup local directory with all files that need to be shipped to the batch host
+    setupInbox()
 
     errors = False
     try:

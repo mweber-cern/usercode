@@ -431,6 +431,11 @@ void setup(const char * configFileName)
   // define a real white color
   TColor mWhite(999, 1., 1., 1., "mWhite");
 
+  // use weighted histograms
+  TH1::SetDefaultSumw2();
+  TH2::SetDefaultSumw2();
+  TH3::SetDefaultSumw2();
+
   // read configuration file
   const char * expConfigFileName = gSystem->ExpandPathName(configFileName);
   read_config_file(expConfigFileName);

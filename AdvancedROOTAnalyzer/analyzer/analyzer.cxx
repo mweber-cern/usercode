@@ -129,7 +129,7 @@ int main(int argc, char *argv[])
     analysis->Loop();
   }
   CATCH;
-  INFO("end of loop");
+  INFO("end of event loop");
 
   // save data in file
   INFO("Saving data to file and closing...");

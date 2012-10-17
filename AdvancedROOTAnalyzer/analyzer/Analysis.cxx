@@ -58,13 +58,13 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fSample = fCfgFile.GetValue("Sample", "None");
   if (fSample == "None")
     THROW("Value \"Sample\" either \"None\" or not configured in configuration file");
-  if (!fSample.compare(1, 4, "data")) {
+  if (!fSample.compare(0, 4, "data")) {
     fInputType = "data";
   }
-  else if (!fSample.compare(1, 6, "signal")) {
+  else if (!fSample.compare(0, 6, "signal")) {
     fInputType = "signal";
   }
-  else if (!fSample.compare(1, 10, "background")) {
+  else if (!fSample.compare(0, 10, "background")) {
     fInputType = "background";
   }
   else {
@@ -142,6 +142,8 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
 
   //////////////////////////////////////////////////////////////////////
   // initialize pileup reweighting
+  fPileupReweighting = fCfgFile.GetValue("PileupReweighting", true);
+  INFO("fPileupReweighting = " << fPileupReweighting);
 #if VERSION == 78
   const char * PileupDataFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupDataFile_2011", ""));
   const char * PileupMCFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupMCFile_2011", ""));
@@ -165,7 +167,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
     LumiWeights_.weight3D_init(PileupWeightFile);
   }
   delete PileupWeightFile;
-#elif VERSION == 88
+#elif VERSION == 88 || VERSION == 92
   const char * PileupDataFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupDataFile_2012", ""));
   const char * PileupMCFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupMCFile_2012", ""));
   if (!check_root_file(PileupMCFile)) {
@@ -689,7 +691,7 @@ void Analysis::Loop()
     if (fFindDuplicates) {
 #if VERSION == 78
       double tempval = global_pthat;
-#elif VERSION == 88
+#elif VERSION == 88 || VERSION == 92
       double tempval = global_qscale;
 #endif
       if (FindDuplicates(global_run, global_event, lumi_section, tempval)) {
@@ -733,11 +735,13 @@ void Analysis::Loop()
     if (fInputType == "mc" || fInputType == "signal" || fInputType == "background") {
 #if VERSION == 78
       double weight = LumiWeights_.weight3D(pu_num_int[0], pu_num_int[1], pu_num_int[2]);
-#elif VERSION == 88
+#elif VERSION == 88 || VERSION == 92
       double weight = LumiWeights_.weight(pu_TrueNrInter);
 #endif
       // if (weight != 0)
+      if (fPileupReweighting) {
 	global_weight *= weight;
+      }
       // else {
       // 	WARNING("pileup weight is zero - not using pileup reweighting for this event");
       // }
@@ -850,7 +854,7 @@ void Analysis::Loop()
 		   muo_ValidTrackerHitsCm[i]);
       // MuonCuts.Set("nMuon_TrackerLayersMeasCm", muo_TrackerLayersMeasCm[i] > 8, 
       // 		   muo_TrackerLayersMeasCm[i]);
-#elif VERSION == 88
+#elif VERSION == 88 || VERSION == 92
       MuonCuts.Set("nMuon_hitsCm", muo_ValidMuonHitsCm[i] > 0, muo_ValidMuonHitsCm[i]);
 
       MuonCuts.Set("nMuon_ispf", muo_isPFMuon[i] == 1, muo_isPFMuon[i]);
@@ -1232,7 +1236,7 @@ void Analysis::Loop()
 	muon_dR[1] < 0.4 ||
 #if VERSION == 78
 	fabs(muo_dzbsCm[fMuoId[0]]-muo_dzbsCm[fMuoId[1]]) > 0.08
-#elif VERSION == 88
+#elif VERSION == 88 || VERSION == 92
 	fabs(muo_dzTk[fMuoId[0]]-muo_dzTk[fMuoId[1]]) > 0.08
 #endif
       ) {
@@ -1307,10 +1311,14 @@ void Analysis::Loop()
     }
     Fill("cutflow", "charge");
 
+    fGauginoMass = gaugino.M();
+    fSmuonMass = (mu0+gaugino).M();
     Fill("m_mumu", m_mumu);
-    Fill("m_gaugino", gaugino.M());
-    Fill("m_smuon", (mu0+gaugino).M());
+    Fill("m_gaugino", fGauginoMass);
+    Fill("m_smuon", fSmuonMass);
+    Fill("jjmm_m", fSmuonMass); // Matthias
     Fill("muo_n", muo_n);
+    Fill("m_smu_chi", fSmuonMass, fGauginoMass);
     FillNoWeight("log_weight", TMath::Log(global_weight)/TMath::Log(10.));
 
     //////////////////////////////////////////////////////////////////////
@@ -1555,8 +1563,10 @@ void Analysis::CreateHistograms()
   CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("m_mumu_met", "m(#mu^{+}, #mu^{-})@GeV (inverse MET cut)", 500, 0, 1000);
   CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
-  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 500);
   CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("jjmm_m", "smuon mass m(#mu_{0},#mu_{1},jets)", 5000, 0, 5000); // Matthias
+  CreateHisto("m_smu_chi", "m(#chi): m(#tilde{#mu})", 110, 0, 2200, 25, 0, 500);
   CreateHisto("muo_n", "Number of muons", 30, 0, 30);
   CreateHisto("ht", "HT@GeV", 100, 0, 500);
 
@@ -1610,6 +1620,8 @@ void Analysis::CreateBranches()
   fOutputTree.Branch("fSigMu", & fSigMu, "fSigMu[2]/I");
   fOutputTree.Branch("fSigJet", & fSigJet, "fSigJet[2]/I");
   fOutputTree.Branch("fJets", & fJets, "fJets/I");
+  fOutputTree.Branch("fSmuonMass", & fSmuonMass, "fSmuonMass/D");
+  fOutputTree.Branch("fGauginoMass", & fGauginoMass, "fGauginoMass/D");
 }
 
 void Analysis::CreateHisto(const char * name, const char * title, Int_t nbinsx, Double_t xlow, Double_t xup)
@@ -1758,7 +1770,7 @@ Double_t Analysis::DeltaPhi(double a, double b) {
  */
 bool Analysis::filterHBHENoise()
 {
-#if VERSION == 88
+#if VERSION == 88 || VERSION == 92
   return noise_HBHE_filter_result;
 #elif VERSION == 78
   bool result = true;

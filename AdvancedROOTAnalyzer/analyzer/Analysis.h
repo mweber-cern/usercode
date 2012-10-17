@@ -37,6 +37,8 @@ protected:
   Int_t     fMuoId[2]; // ID's of selected muons
   TLorentzVector fSigMu[2]; // only in case of signal: generated muons
   TLorentzVector fSigJet[2]; // only in case of signal: generated jets
+  double    fSmuonMass;
+  double    fGauginoMass;
 
   //////////////////////////////////////////////////////////////////////
   // configuration options
@@ -51,6 +53,7 @@ protected:
   bool      fDumpBasic; // Dump basic information
   bool      fDumpTruth; // Dump MC truth information
   string    fDumpTrigger; // Dump Trigger information
+  bool      fPileupReweighting; // use pileup reweighting?
   bool      fSkimActive; // Skimming Active?
   Int_t     fSkimMuons;  // how many muons to require
   Double_t  fSkimMuoptfirst; // cut on muon with highest pt

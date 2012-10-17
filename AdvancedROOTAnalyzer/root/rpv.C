@@ -213,7 +213,7 @@ void signalplot(Bool_t batchmode = kTRUE)
 {
   gROOT->SetBatch(batchmode);
 
-  // plot 1
+  // plot
   cd(1);
   plot("Sig_nMuon");
   zoom(0, 6);
@@ -223,16 +223,34 @@ void signalplot(Bool_t batchmode = kTRUE)
   zoom(0, 6);
   print("Sig_nMuNeutrino.pdf");
 
-  // plot 2
+  // plot
+  cd(1);
+  plot("Sig_nQuark");
+  zoom(0, 6);
+  legend();
+  cd(2);
+  plot("Sig_nHiggs");
+  zoom(0, 6);
+  print("Sig_nQuarkHiggs.pdf");
+
+  // plot
   cd(1);
   plot("Sig_SleptonMass");
-  zoom(120,220);
+  zoom(980,1100);
+  legend();
+  cd(2);
+  plot("Sig_Resonance");
+  zoom(980,1100);
+  print("Sig_SleptonMassResonance.pdf");
+
+  cd(1);
+  plot("Sig_nBoson");
   legend();
   cd(2);
   plot("Sig_SleptonCharge");
-  print("Sig_SleptonMassAndCharge.pdf");
+  print("Sig_nBosonSleptonCharge.pdf");
 
-  // plot 3
+  // plot
   cd(1);
   plot("Sig_EtaMu");
   rebin(2);
@@ -242,17 +260,19 @@ void signalplot(Bool_t batchmode = kTRUE)
   rebin(4);
   print("Sig_MuEtaPhi.pdf");
 
-  // plot 4
+  // plot
   cd(1);
   plot("Sig_ptMu1");
-  zoom(0,80);
+  rebin(5);
+  // zoom(0,80);
   legend(0.01, -1);
   cd(2); 
   plot("Sig_ptMu2");
-  zoom(0,80);
+  rebin(5);
+  // zoom(0,80);
   print("Sig_MuPt12.pdf");
 
-  // plot 5
+  // plot
   cd(1);
   plot("Sig_EtaQuark");
   legend();
@@ -261,26 +281,77 @@ void signalplot(Bool_t batchmode = kTRUE)
   rebin(4);
   print("Sig_QuarkEtaPhi.pdf");
 
-  // plot 6
+  // plot
   cd(1);
   plot("Sig_ptQuark1");
-  zoom(0,80);
-  legend();
+  rebin(5);
+  // zoom(0,80);
+  legend(-1);
   cd(2);
   plot("Sig_ptQuark2");
-  zoom(0,80);
+  rebin(5);
+  // zoom(0,80);
   print("Sig_QuarkPt.pdf");
 
-  // plot 7
+  // plot
   cd(1);
-  plot("Sig_Mass3");
-  zoom(50, 150);
+  plot("Sig_MuDEta");
   legend();
   cd(2);
-  plot("Sig_MuIsoR");
-  print("Sig_MassDeltaR.pdf");
+  plot("Sig_MuDPhi");
+  rebin(5);
+  print("Sig_MuEtaPhi.pdf");
 
-  // plot 8
+  // plot
+  cd(1);
+  plot("Sig_MuMass");
+  rebin(5);
+  legend();
+  cd(2);
+  plot("Sig_MuDPt");
+  rebin(5);
+  print("Sig_MuMassDPt.pdf");
+
+  // plot
+  cd(1);
+  plot("Sig_JetDEta");
+  legend();
+  cd(2);
+  plot("Sig_JetDPhi");
+  rebin(5);
+  print("Sig_JetEtaPhi.pdf");
+
+  // plot
+  cd(1);
+  plot("Sig_JetMass");
+  rebin(5);
+  zoom(0,300);
+  legend();
+  cd(2);
+  plot("Sig_JetDPt");
+  rebin(5);
+  print("Sig_JetMassDPt.pdf");
+
+  // plot
+  cd(1);
+  plot("Sig_JetSumPt");
+  rebin(5);
+  legend();
+  cd(2);
+  plot("xxx");
+  print("Sig_JetSumPt.pdf");
+
+  // plot
+  cd(1);
+  plot("Sig_Mass3");
+  zoom(200, 220);
+  legend();
+  cd(2);
+  plot("Sig_Angle3");
+  rebin(5);
+  print("Sig_Mass3Angle3.pdf");
+
+  // plot
   cd(1);
   plot("vtx_n");
   legend();
@@ -290,7 +361,7 @@ void signalplot(Bool_t batchmode = kTRUE)
   min(0.1);
   print("Vertex_1.pdf");
 
-  // plot 9
+  // plot
   cd(1);
   plot("vtx_y");
   logy();
@@ -301,7 +372,7 @@ void signalplot(Bool_t batchmode = kTRUE)
   liny();
   print("Vertex_2.pdf");
 
-  // plot 9
+  // plot
   cd(1);
   plot("vtx_ntr");
   liny();
@@ -518,6 +589,42 @@ void mc_comparison()
   plotlinlog("check_vtxn");
   plotlinlog("check_nmuon");
   plotlinlog("check_njets");
+}
+
+// ttbar and data in one histogram
+void signal_xcheck()
+{
+  gStyle->SetPadRightMargin(0.2);
+  selection("default18");
+  plot2("m_smu_chi");
+  MakeCanvas(1,1);
+  // plot background(s)
+  for (int i = 0; i < gMaxProcess-1; i++) {
+    if (!strncmp("ttjets", gProcess[i].fname, 6)) {
+	TH2D * hBack = gHisto2[i];
+	hBack->SetAxisRange(0, 1000);
+	hBack->Draw("colz");
+    }
+  }
+  // // plot signal(s)
+  // for (int i = 0; i < gMaxProcess-1; i++) {
+  //   if (!strncmp("signal", gProcess[i].fname, 6)) {
+  // 	TH2D * hSignal = gHisto2[i];
+  // 	hSignal->Scale(1./50.);
+  // 	hSignal->Draw("boxsame");
+  //   }
+  // }
+  // plot data
+  TH2D * hdata = gHisto2[gMaxProcess-1];
+  hdata->SetMarkerStyle(5);
+  hdata->SetMarkerSize(2.);
+  hdata->Draw("same");
+
+  TLegend * leg = new TLegend(0.6, 0.2, 0.75, 0.5);
+  leg->AddEntry(hBack, "t#bar{t}", "f");
+  // leg->AddEntry(hSignal, "signal", "l");
+  leg->AddEntry(hdata, "data", "p");
+  leg->Draw();
 }
 
 void limitplot(const char * fname = "XscLimitsAndErrorsRooStats.txt")

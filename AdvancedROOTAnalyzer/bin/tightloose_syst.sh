@@ -75,8 +75,9 @@ if [[ "${SUFFIX}" != "" && ${SUFFIX} != "_singlefake" && ${SUFFIX} != "_doublefa
     usage
     exit 1
 fi
+
 ## original default submission
-#for name in default13
+#for name in default16
 #do
 #    TYPE=${name}${SUFFIX}
 #    echo "Start submitting ${TYPE}" >> ${LOGFILE}
@@ -120,7 +121,7 @@ fi
 # systematics for a possible trigger bias
 for trigger in singlemu mu8_jet40
 do
-    TYPE=triggerbias_${trigger}${SUFFIX}
+    TYPE=triggerbias_${trigger}_pileup${SUFFIX}
     echo "Start submitting ${TYPE}" >> ${LOGFILE}
     if [[ ${SUFFIX} == "" ]] ; then
 	JOBGROUP="${trigger}"
