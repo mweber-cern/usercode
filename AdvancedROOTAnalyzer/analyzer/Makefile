@@ -43,16 +43,21 @@ LDFLAGS      += $(EXTLIBS)
 SOURCES_COMMON	= $(shell ls *.cxx | grep -v _v[0-9][0-9].cxx )
 SOURCES_78	= $(shell ls *_v78.cxx )
 SOURCES_88	= $(shell ls *_v88.cxx )
+SOURCES_92	= $(shell ls *_v92.cxx )
 HEADERS_COMMON  = $(SOURCES_COMMON:.cxx=.h)
 HEADERS_78     	= $(SOURCES_78:.cxx=.h)
 HEADERS_88     	= $(SOURCES_88:.cxx=.h)
+HEADERS_92     	= $(SOURCES_92:.cxx=.h)
 OBJECTS_78	= $(SOURCES_78:.cxx=.o) $(SOURCES_COMMON:.cxx=_v78.o)
 OBJECTS_88	= $(SOURCES_88:.cxx=.o) $(SOURCES_COMMON:.cxx=_v88.o)
+OBJECTS_92	= $(SOURCES_92:.cxx=.o) $(SOURCES_COMMON:.cxx=_v92.o)
 DEPENDS_78	= $(SOURCES_78:.cxx=.d) $(SOURCES_COMMON:.cxx=_v78.d)
 DEPENDS_88	= $(SOURCES_88:.cxx=.d) $(SOURCES_COMMON:.cxx=_v88.d)
+DEPENDS_92	= $(SOURCES_92:.cxx=.d) $(SOURCES_COMMON:.cxx=_v92.d)
 
 DICT_78	      = Dict_v78
 DICT_88	      = Dict_v88
+DICT_92	      = Dict_v92
 
 CUTFLOW	      = CutFlow
 
@@ -63,13 +68,13 @@ DATE	     := $(shell date "+%F")
 
 .PHONY:		all clean distclean tarball
 
-all:            $(PROGRAM)_v78 $(PROGRAM)_v88
+all:            $(PROGRAM)_v78 $(PROGRAM)_v88 $(PROGRAM)_v92
 
 clean:
-		rm -f $(OBJECTS_COMMON) $(OBJECTS_78) $(OBJECTS_88) \
-		 $(PROGRAM)_v78 $(PROGRAM)_v88 \
-		 $(DEPENDS_78) $(DEPENDS_88) \
-		 $(DICT_78).* $(DICT_88).* $(CUTFLOW).*
+		rm -f $(OBJECTS_COMMON) $(OBJECTS_78) $(OBJECTS_88) $(OBJECTS_92) \
+		 $(PROGRAM)_v78 $(PROGRAM)_v88 $(PROGRAM)_v92 \
+		 $(DEPENDS_78) $(DEPENDS_88) $(DEPENDS_92) \
+		 $(DICT_78).* $(DICT_88).* $(DICT_92).* $(CUTFLOW).*
 
 distclean:      clean
 		@rm -f *.o *.d *~ core *.def *.exp *.root *.ps .def gmon.out
@@ -100,6 +105,16 @@ tarball:
 %_v88.o: %_v88.C
 	$(CXX) $(CXXFLAGS) -DVERSION=88 -c $<
 
+%_v92.o: %.cxx 
+	$(CXX) $(CXXFLAGS) -DVERSION=92 -c $< -o $@
+
+%_v92.o: %_v92.cxx 
+	$(CXX) $(CXXFLAGS) -DVERSION=92 -c $< -o $@
+
+%_v92.o: %_v92.C
+	$(CXX) $(CXXFLAGS) -DVERSION=92 -c $<
+
+
 %.o: %.f
 	$(FC) $(FCFLAGS) -c $< -o $@
 
@@ -115,7 +130,13 @@ tarball:
 %_v88.d: %.cxx
 	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=88 $< > $@'
 
-include $(DEPENDS_78) $(DEPENDS_88)
+%_v92.d: %_v92.cxx
+	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=92 $< > $@'
+
+%_v92.d: %.cxx
+	$(SHELL) -ec '$(CXX) -M $(CXXFLAGS) -DVERSION=92 $< > $@'
+
+include $(DEPENDS_78) $(DEPENDS_88) $(DEPENDS_92)
 
 ######################################################################
 # special procedures
@@ -131,6 +152,10 @@ $(DICT_88).C: $(HEADERS_COMMON) $(HEADERS_88) LinkDef.h
 	@echo "Generating dictionary $(DICT)..."
 	rootcint -f $@ -c $(EXTINCDIR) -DVERSION=88 $+
 
+$(DICT_92).C: $(HEADERS_COMMON) $(HEADERS_92) LinkDef.h
+	@echo "Generating dictionary $(DICT)..."
+	rootcint -f $@ -c $(EXTINCDIR) -DVERSION=92 $+
+
 $(CUTFLOW).C: Analysis.cxx
 	@echo "Generating cutflow..."
 	../bin/gencutflow.py -f $@ $+
@@ -145,3 +170,8 @@ $(PROGRAM)_v78:  $(OBJECTS_COMMON) $(OBJECTS_78) $(DICT_78).o $(CUTFLOW).o
 $(PROGRAM)_v88:  $(OBJECTS_COMMON) $(OBJECTS_88) $(DICT_88).o $(CUTFLOW).o
 	$(LD) $(LDFLAGS) $+ -o $@
 		@echo "$@ done"
+
+$(PROGRAM)_v92:  $(OBJECTS_COMMON) $(OBJECTS_92) $(DICT_92).o $(CUTFLOW).o
+	$(LD) $(LDFLAGS) $+ -o $@
+		@echo "$@ done"
+
