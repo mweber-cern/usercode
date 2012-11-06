@@ -17,9 +17,13 @@ void Analysis::BasicDump(int i) {
   cout << "   Store " << setw(9) << global_store << "     Orbit " << setw(10) << global_orbit 
        << "     BX " << setw(18) << global_bx << endl;
   cout << endl;
+#if VERSION == 78 || VERSION == 88
   cout << "   B Field " << setw(7) << global_bfield << "     Trigger List         " 
        << unpack(trig_HLTName) << endl;
   cout << endl;
+#else /* VERSION == 78 || VERSION == 88 */
+  cout << "   B Field " << setw(7) << global_bfield << endl;
+#endif /* VERSION == 78 || VERSION == 88 */
   cout << "   Hottest ECAL Cell R9 [ pT eta phi ] [ time chi flag ] : " << setw(7) 
        << noise_ecal_r9 << " [" << setw(7) << fixed << noise_ecal_pt << setw(9) << noise_ecal_eta 
        << setw(9) << noise_ecal_phi << " ] [" << setw(9) << noise_ecal_time << setw(9) 
@@ -50,19 +54,45 @@ void Analysis::TriggerDump(TString sel) {
   cout << "   No  Trigger Name                   Filter Name                                  Prescale L1  HLT       pT      eta      phi " << endl;
 
   for (int i=0; i<trig_n; i++) {
+#if VERSION == 78 || VERSION == 88
     TString tname =  unpack(trig_name[i]);
+#else /* VERSION == 78 || VERSION == 88 */
+    TString tname =  (*trig_name)[i].c_str();
+#endif /* VERSION == 78 || VERSION == 88 */
     if (sel != "*" && !tname.Contains(sel))
       continue;
     cout.flags(ios::right);
     cout << setw(5) << i << "  ";
+#if VERSION == 78 || VERSION == 88
     cout.flags(ios::left);
     cout << setw(30) << tname << " " << setw(50) << unpack(trig_filter[i]);
+#else /* VERSION == 78 || VERSION == 88 */
+    cout << setw(3) << tname << "   ";
+#endif /* VERSION == 78 || VERSION == 88 */
     cout.flags(ios::right);
+#if VERSION == 78 || VERSION == 88
     cout << " " << setw(5) << fixed << trig_L1prescale[i] << setw(5) << trig_HLTprescale[i] 
 	 << setw(9) << trig_pt[i] << setw(9) << trig_eta[i] << setw(9) << trig_phi[i] << endl;
+#else /* VERSION == 78 || VERSION == 88 */
+    cout << " " << setw(5) << fixed << trig_L1prescale[i] << setw(5) << trig_HLTprescale[i] << endl;
+#endif /* VERSION == 78 || VERSION == 88 */
   }
   cout << endl;
 
+#if VERSION == 78 || VERSION == 88
+#else
+  cout << "Found " << trigFilter_n << " trigger objects for " << (*trig_filter).size() << " filter names" << endl;
+  cout << "Trigger object list: name id pt eta phi" << endl;
+
+  for (int i=0; i<trigFilter_n; i++) {
+    cout.flags(ios::left);
+    cout << setw(50) << (*trig_filter)[trig_filterid[i]] << " " << trig_filterid[i] << " " ;
+    cout << setw(10) << trig_id[i] 
+	 << setw(10) << trig_pt[i] 
+	 << setw(10) << trig_eta[i] 
+	 << setw(10) << trig_phi[i] << endl;
+  }
+#endif /* ! VERSION == 78 || VERSION == 88 */
 }
 
 void Analysis::MuonDump(bool full) {
@@ -98,11 +128,16 @@ void Analysis::MuonDump(bool full) {
     if (full) {
       cout << " [" << setw(3) << muo_ValidPixelHitsCm[i] << setw(3) << muo_ValidTrackerHitsCm[i] << setw(3) 
 	   << muo_ValidMuonHitsCm[i] << setw(6) << muo_ChambersMatched[i] << setw(5) 
+#if VERSION == 78 || VERSION == 88
 	   << muo_TrackerLayersMeasCm[i] << setw(5) << muo_TrackerLayersNotMeasCm[i] << " ]";
       cout << " [";
       for (int k=0; k<muo_trign[i]; k++) 
 	cout << " " << muo_trig[i][k];
       cout << " ]" <<endl;
+#else /* VERSION == 78 || VERSION == 88 */
+	   << muo_TrackerLayersMeasCm[i] << setw(5) << muo_TrackerLayersNotMeasCm[i] 
+	   << endl;
+#endif /* VERSION == 78 || VERSION == 88 */
     }
     else
       cout << endl;
@@ -122,6 +157,7 @@ void Analysis::MuonDump(bool full) {
 
 }
 
+#if VERSION == 78 || VERSION == 88
 void Analysis::CaloJetDump() {
 
   cout << setprecision(3);
@@ -147,6 +183,7 @@ void Analysis::CaloJetDump() {
 
 }
 
+#endif /* VERSION == 78 || VERSION == 88 */
 void Analysis::PFJetDump() {
 
   cout << setprecision(3);
@@ -258,11 +295,20 @@ void Analysis::VertexDump() {
 }
 
 void Analysis::METDump() {
+#if VERSION == 78 || VERSION == 88
+#else
+  const char * met_types[] = {
+    "PFMET (raw)         ",
+    "PFMET (Type 1 corr.)",
+    "PFMET (Type 0 corr.)"
+  };
+#endif /* ! VERSION == 78 || VERSION == 88 */
 
   cout << setprecision(3);
 
   cout << "  ===  MET Dump  === " << endl;
   cout << "  Type          MET     phi        MEx     MEy     METSig     SumEt   SumEtSig" << endl;
+#if VERSION == 78 || VERSION == 88
   cout << "  CaloMET " << setw(9) << fixed << met_et[0] << setw(8) << met_phi[0] 
        << "  [" << setw(8) << met_ex[0] << setw(8) << met_ey[0] 
        << " ] " << setw(8) << met_etsignif[0] << " [" << setw(9) << met_sumet[0] << setw(9) << met_sumetsig[0] << " ]" << endl;
@@ -278,6 +324,13 @@ void Analysis::METDump() {
   cout << "  GENMET2 " << setw(9) << fixed << met_et[2] << setw(8) << met_phi[2] 
        << "  [" << setw(8) << met_ex[2] << setw(8) << met_ey[2] 
        << " ] " << setw(8) << met_etsignif[2] << " [" << setw(9) << met_sumet[2] << setw(9) << met_sumetsig[2] << " ]" << endl;
+#else /* VERSION == 78 || VERSION == 88 */
+  for (int i = 0; i < 2; i++) {
+    cout << "  " << met_types[i] << setw(9) << fixed << met_et[i] << setw(8) << met_phi[i] 
+	 << "  [" << setw(8) << met_ex[i] << setw(8) << met_ey[i] 
+	 << " ] " << setw(8) << met_etsignif[i] << " [" << setw(9) << met_sumet[i] << setw(9) << met_sumetsig[i] << " ]" << endl;
+  }
+#endif /* VERSION == 78 || VERSION == 88 */
   cout << endl;
 
 }
@@ -344,8 +397,10 @@ void Analysis::EleDump(bool full) {
 	   << setw(7) << ele_dr03HcalDepth1[i] << setw(7) << ele_dr03HcalDepth2[i]
 	   << setw(7) << ele_e5x5[i] << " ]";
       cout << " [";
+#if VERSION == 78 || VERSION == 88
       for (int k=0; k<ele_trign[i]; k++) 
 	cout << " " << ele_trig[i][k];
+#endif /* VERSION == 78 || VERSION == 88 */
       cout << " ]" <<endl;
     }
     else
@@ -378,8 +433,10 @@ void Analysis::PFEleDump(bool full) {
     cout << setw(5) << pfele_SC[i] << setw(5) << pfele_truth[i];
     if (full) {
       cout << "   [";
+#if VERSION == 78 || VERSION == 88
       for (int k=0; k<pfele_trign[i]; k++) 
 	cout << " " << pfele_trig[i][k];
+#endif /* VERSION == 78 || VERSION == 88 */
       cout << " ]" <<endl;
     }
     else

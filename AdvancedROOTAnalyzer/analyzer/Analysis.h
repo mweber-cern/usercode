@@ -25,6 +25,9 @@
 #elif VERSION == 92
 #include "TreeContent_v92.h"
 #include "LumiReweightingStandAlone_v92.h"
+#elif VERSION == 96
+#include "TreeContent_v96.h"
+#include "LumiReweightingStandAlone_v96.h"
 #endif
 
 

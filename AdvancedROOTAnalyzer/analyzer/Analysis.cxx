@@ -23,6 +23,12 @@
 
 using namespace std;
 
+#if VERSION == 78 || VERSION == 88
+const int MET_INDEX = 3;
+#else
+const int MET_INDEX = 1;
+#endif
+
 // externally generated with ../bin/gencutflow.py
 extern TH1D * get_cutflow_histogram();
 
@@ -167,7 +173,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
     LumiWeights_.weight3D_init(PileupWeightFile);
   }
   delete PileupWeightFile;
-#elif VERSION == 88 || VERSION == 92
+#elif VERSION == 88 || VERSION == 92 || VERSION == 96
   const char * PileupDataFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupDataFile_2012", ""));
   const char * PileupMCFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupMCFile_2012", ""));
   if (!check_root_file(PileupMCFile)) {
@@ -531,8 +537,8 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   int nMuonsLoose = loose_muons.size();
   int nMuonsTight = tight_muons.size();
   // fill histograms before cuts
-  Fill("TL_met", met_et[3]);
-  Fill("TL_metsig", met_etsignif[3]);
+  Fill("TL_met", met_et[MET_INDEX]);
+  Fill("TL_metsig", met_etsignif[MET_INDEX]);
   Fill("TL_jetpt", fJets > 0 ? pfjet_pt[jets[0]] : 0);
   Fill("TL_ht", HT);
   Fill("TL_nloose", nMuonsLoose);
@@ -540,7 +546,7 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   // global requirements to get more QCD like events
   TCutList QCDCuts(histo, global_weight);
   // mainly against ttbar, and a bit w->l nu
-  QCDCuts.Set("nTL_met", met_et[3] < fTL_met_max, met_et[3]); 
+  QCDCuts.Set("nTL_met", met_et[MET_INDEX] < fTL_met_max, met_et[MET_INDEX]); 
   // remove Drell-Yan and signal
   QCDCuts.Set("nTL_ht", fTL_ht_min <= HT, HT);
   // trigger
@@ -553,7 +559,7 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   double ST = HT;
   for (Int_t i = 0; i < nMuonsLoose; i++) {
     // muon dependent requirements to get more QCD like events
-    Fill("TL_metdphi", DeltaPhi(met_phi[3], muo_phi[loose_muons[i]]));
+    Fill("TL_metdphi", DeltaPhi(met_phi[MET_INDEX], muo_phi[loose_muons[i]]));
     double dphi = 0.;
     if (fJets > 0)
       dphi = DeltaPhi(pfjet_phi[jets[0]], muo_phi[loose_muons[i]]);
@@ -575,8 +581,8 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
     }
     QCDCuts.Set("nTL_zmass", zmass < fTL_zmass_min || fTL_zmass_max < zmass, zmass);
     // compute transverse mass of MET and mu (W hypothesis)
-    double cos_phi12 = TMath::Cos(DeltaPhi(met_phi[3], mu0.Phi()));
-    double MT = TMath::Sqrt(2*met_et[3]*mu0.Pt()*(1.-cos_phi12));
+    double cos_phi12 = TMath::Cos(DeltaPhi(met_phi[MET_INDEX], mu0.Phi()));
+    double MT = TMath::Sqrt(2*met_et[MET_INDEX]*mu0.Pt()*(1.-cos_phi12));
     Fill("TL_mt", MT);
 
     // muon pt requirement - needed for MC and data comparison
@@ -691,7 +697,7 @@ void Analysis::Loop()
     if (fFindDuplicates) {
 #if VERSION == 78
       double tempval = global_pthat;
-#elif VERSION == 88 || VERSION == 92
+#elif VERSION == 88 || VERSION == 92 || VERSION == 96
       double tempval = global_qscale;
 #endif
       if (FindDuplicates(global_run, global_event, lumi_section, tempval)) {
@@ -735,7 +741,7 @@ void Analysis::Loop()
     if (fInputType == "mc" || fInputType == "signal" || fInputType == "background") {
 #if VERSION == 78
       double weight = LumiWeights_.weight3D(pu_num_int[0], pu_num_int[1], pu_num_int[2]);
-#elif VERSION == 88 || VERSION == 92
+#elif VERSION == 88 || VERSION == 92 || VERSION == 96
       double weight = LumiWeights_.weight(pu_TrueNrInter);
 #endif
       // if (weight != 0)
@@ -788,7 +794,11 @@ void Analysis::Loop()
     bool rejection = true;
     // loop over all triggers
     for (int i = 0; i < trig_n && rejection; i++) {
+#if VERSION ==78 || VERSION == 88
       trigger = unpack(trig_name[i]);
+#else
+      trigger = (*trig_name)[i].c_str();
+#endif
       // loop over triggers which are accepted
       for (vector<string>::const_iterator it = fTrigger.begin(); 
 	   it != fTrigger.end(); it++) {
@@ -854,7 +864,7 @@ void Analysis::Loop()
 		   muo_ValidTrackerHitsCm[i]);
       // MuonCuts.Set("nMuon_TrackerLayersMeasCm", muo_TrackerLayersMeasCm[i] > 8, 
       // 		   muo_TrackerLayersMeasCm[i]);
-#elif VERSION == 88 || VERSION == 92
+#elif VERSION == 88 || VERSION == 92 || VERSION == 96
       MuonCuts.Set("nMuon_hitsCm", muo_ValidMuonHitsCm[i] > 0, muo_ValidMuonHitsCm[i]);
 
       MuonCuts.Set("nMuon_ispf", muo_isPFMuon[i] == 1, muo_isPFMuon[i]);
@@ -921,6 +931,7 @@ void Analysis::Loop()
     vector <double> tight_dR;
     vector <double> loose_dR;
     for (int i = 0; i < nMuon; i++) {
+ #if VERSION == 78 || VERSION == 88
       // Trigger matching
       Int_t matched = 0;
       for (int k = 0; k < muo_trign[muons[i]]; k++) {
@@ -938,6 +949,7 @@ void Analysis::Loop()
       // require this muon to be matched
       if (matched == 0)
 	continue;
+#endif
 
       // relative isolation
       double relIso = 1000.;
@@ -1236,7 +1248,7 @@ void Analysis::Loop()
 	muon_dR[1] < 0.4 ||
 #if VERSION == 78
 	fabs(muo_dzbsCm[fMuoId[0]]-muo_dzbsCm[fMuoId[1]]) > 0.08
-#elif VERSION == 88 || VERSION == 92
+#elif VERSION == 88 || VERSION == 92 || VERSION == 96
 	fabs(muo_dzTk[fMuoId[0]]-muo_dzTk[fMuoId[1]]) > 0.08
 #endif
       ) {
@@ -1253,7 +1265,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // jet smearing (JER)
-    Fill("pfmet_old", met_et[3]);
+    Fill("pfmet_old", met_et[MET_INDEX]);
     PFJetSmearingCalculation();
     PFJetSmearing();
     Fill("cutflow", "jetsmear");
@@ -1261,9 +1273,9 @@ void Analysis::Loop()
     //////////////////////////////////////////////////////////////////////
     // MET cut
     
-    Fill("pfmet", met_et[3]);
+    Fill("pfmet", met_et[MET_INDEX]);
     /// Particle flow MET
-    if (met_et[3] >= 50.) {
+    if (met_et[MET_INDEX] >= 50.) {
       // fill some histograms for inverse cut (needed for cross-checks)
       Fill("m_mumu_met", m_mumu);
       continue;
@@ -1770,7 +1782,7 @@ Double_t Analysis::DeltaPhi(double a, double b) {
  */
 bool Analysis::filterHBHENoise()
 {
-#if VERSION == 88 || VERSION == 92
+#if VERSION == 88
   return noise_HBHE_filter_result;
 #elif VERSION == 78
   bool result = true;
@@ -1880,6 +1892,13 @@ bool Analysis::filterHBHENoise()
     Fill("noise_hcal_HasBadRBXTS4TS5", 1.);
   }
   return result;
+#else
+  static bool first = true;
+  if (first) {
+    WARNING("filterHBHENoise does not work yet in this version");
+    first = false;
+  }
+  return true;
 #endif
 }
 
@@ -1887,7 +1906,7 @@ bool Analysis::filterHBHENoise()
 void Analysis::PFJetSmearing() 
 {
   // save old value for later use
-  fJER_met_old = met_et[3];
+  fJER_met_old = met_et[MET_INDEX];
   // do not smear data
   if (fInputType == "data")
     return;
@@ -1928,8 +1947,8 @@ void Analysis::PFJetSmearing()
 	DEBUG("Scaled: dE = " << dE << ", scale = " << scale);
       }
       // correct MET
-      met_ex[3]   -= pfjet_px[j] * fJER_scale * scale;
-      met_ey[3]   -= pfjet_py[j] * fJER_scale * scale;
+      met_ex[MET_INDEX]   -= pfjet_px[j] * fJER_scale * scale;
+      met_ey[MET_INDEX]   -= pfjet_py[j] * fJER_scale * scale;
       
       // correct PF jets
       double ratio = 1. + fJER_scale * scale;
@@ -1945,9 +1964,9 @@ void Analysis::PFJetSmearing()
   }
 
   // calculate new MET
-  TVector3 mpf(met_ex[3], met_ey[3], 0.);
-  met_phi[3] = mpf.Phi();
-  met_et[3]  = mpf.Perp();
+  TVector3 mpf(met_ex[MET_INDEX], met_ey[MET_INDEX], 0.);
+  met_phi[MET_INDEX] = mpf.Phi();
+  met_et[MET_INDEX]  = mpf.Perp();
 }
 
 void Analysis::PFJetSmearingCalculation() 
@@ -1961,8 +1980,8 @@ void Analysis::PFJetSmearingCalculation()
     double f = h->GetYaxis()->GetBinLowEdge(biny)+h->GetYaxis()->GetBinWidth(biny)/2.;
 
     // initialize MET values to original values
-    double mymet_x = met_ex[3];
-    double mymet_y = met_ey[3];
+    double mymet_x = met_ex[MET_INDEX];
+    double mymet_y = met_ey[MET_INDEX];
 
     // loop over all jets
     for (int j = 0; j < pfjet_n; j++) {
