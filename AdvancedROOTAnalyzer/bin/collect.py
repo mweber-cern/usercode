@@ -106,6 +106,7 @@ def rm(job, period):
 
 def check_join(jobgroup, job, period):
     if not check(job,period):
+        rm(job, period)
         return False
     if not join(job, period):
         rm(job, period)
