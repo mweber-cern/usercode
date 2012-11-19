@@ -36,8 +36,12 @@ def check(job, period):
     # Find all job files from directory
     jobfiles = []
     for filename in os.listdir(myDir):
-        if job in filename and ".cfg" in filename and not "condor" in filename:
-            jobfiles.append(filename[:filename.find(".cfg")])
+        if job in filename and "_condor.cfg" in filename:
+            jobfiles.append(filename[:filename.find("_condor.cfg")])
+
+    if len(jobfiles) == 0:
+        print 'Error, no job files found for process', job
+        return False
 
     # Check all job files
     good = True
