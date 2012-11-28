@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
   INFO("");
   INFO("######################################################################");
   INFO("#                                                                    #");
-  INFO("# Start executing analyzer at " << asctime(timeinfo)		       );
+  INFO("# Start executing analyzer version " << VERSION << "                               #");
   INFO("#                                                                    #");
   INFO("######################################################################");
   INFO("");
@@ -50,7 +50,9 @@ int main(int argc, char *argv[])
   // read configuration file, configure values from command line
   INFO("Using configuration file: " << argv[3]);
   TEnv cfgFile(argv[3]);
-  gLogLevel = cfgFile.GetValue("LogLevel", 3);
+  int loglevel = cfgFile.GetValue("LogLevel", 3);
+  INFO("Using log level " << loglevel);
+  gLogLevel = loglevel;
   cfgFile.SetValue("Sample", argv[1]);
   const char * outputFileName = argv[2];
 
@@ -158,12 +160,13 @@ int main(int argc, char *argv[])
   // info at end of program
   time(&rawtime);
   timeinfo = localtime ( &rawtime );
+  gLogLevel = 3;
   INFO("");
-  INFO("######################################################################");;
-  INFO("#                                                                    #");;
-  INFO("# End executing analyzer at " << asctime(timeinfo)		       );
-  INFO("#                                                                    #");;
-  INFO("######################################################################");;
+  INFO("######################################################################");
+  INFO("#                                                                    #");
+  INFO("# End executing analyzer                                             #");
+  INFO("#                                                                    #");
+  INFO("######################################################################");
   INFO("");
   
   return 0;
