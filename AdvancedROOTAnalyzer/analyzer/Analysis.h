@@ -16,6 +16,8 @@
 #include <set>
 #include <map>
 
+#include "BTagging.h"
+
 #if VERSION == 78
 #include "TreeContent_v78.h"
 #include "LumiReweightingStandAlone_v78.h"
@@ -38,13 +40,6 @@ protected:
   TTree &   fInputTree;
   TTree &   fOutputTree;
   TEnv  &   fCfgFile;
-  Double_t    fFakeRate[2]; // fake rate for the two muons
-  Double_t    fSingleFakeWeight;  // fake rate weight for one mu fluctutation in doublefake sample
-  Int_t     fMuoId[2]; // ID's of selected muons
-  TLorentzVector fSigMu[2]; // only in case of signal: generated muons
-  TLorentzVector fSigJet[2]; // only in case of signal: generated jets
-  double    fSmuonMass;
-  double    fGauginoMass;
 
   //////////////////////////////////////////////////////////////////////
   // configuration options
@@ -70,6 +65,7 @@ protected:
   vector<string> fTrigger; // trigger selection
   bool      fForceUnprescaledTriggers; // Force unprescaled triggers
   string    fLumiRanges; // lumi ranges (JSON file) for data processing
+  Double_t  fDeltaPhiMin; // max delta phi (leading mu, gaugino)
 
   // cuts for T/L ratio
   Double_t fTL_met_max;
@@ -92,10 +88,34 @@ protected:
 
   //////////////////////////////////////////////////////////////////////
   // analysis variables
-  bool      fIsSignal;
-  TH3D  *   fFakeRateHisto3D;
-  TH2D  *   fFakeRateHisto2D;
-  Int_t     fJets;
+
+  // signal study
+  bool             fIsSignal;
+  TLorentzVector * fSigMu0; // only in case of signal: generated muons
+  TLorentzVector * fSigMu1;
+  TLorentzVector * fSigJet0; // only in case of signal: generated jets
+  TLorentzVector * fSigJet1; 
+
+  // fake rate
+  TH3D           * fFakeRateHisto3D;
+  TH2D           * fFakeRateHisto2D;
+  Double_t         fSingleFakeWeight;  // fake rate weight for one mu fluctuation 
+  Double_t         fFakeRate[2];       // fake rate for the two muons
+
+  // save particles for later analysis
+  Int_t            fMuoId[2]; // ID's of selected muons
+  TLorentzVector * fMuon0;
+  TLorentzVector * fMuon1;
+  Int_t            fJets;
+  Int_t            fJetId[40]; // ID's of selected main jets
+  TLorentzVector * fJet0;
+  TLorentzVector * fJet1;
+  double           fBtag0;
+  double           fBtag1;
+  Bool_t           fIsBTagged0;
+  Bool_t           fIsBTagged1;
+  TLorentzVector * fSmuon;
+  TLorentzVector * fGaugino;
 
 public:
   Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile);
@@ -103,6 +123,7 @@ public:
 
   void SetBranchAddresses();
   void CreateBranches();
+  void CreateVariables();
   void Loop();
 
 protected:
@@ -126,8 +147,14 @@ protected:
   void CreateHisto(const char * name, const char * title, 
 		   Int_t nbinsx, Double_t xlow, Double_t xup, 
 		   Int_t nbinsy, Double_t ylow, Double_t yup);
-  void CreateHisto(const char * name, const char * title, Int_t 
-		   nbinsx, Double_t xlow, Double_t xup, 
+  void CreateHisto(const char * name, const char * title, 
+		   Int_t nbinsx, const Double_t * xbins, 
+		   Int_t nbinsy, Double_t ylow, Double_t yup);
+  void CreateHisto(const char * name, const char * title, 
+		   Int_t nbinsx, const Double_t * xbins, 
+		   Int_t nbinsy, const Double_t * ybins);
+  void CreateHisto(const char * name, const char * title, 
+		   Int_t nbinsx, Double_t xlow, Double_t xup, 
 		   Int_t nbinsy, Double_t ylow, Double_t yup, 
 		   Int_t nbinsz, Double_t zlow, Double_t zup);
   void Fill(const char * name, double value);
@@ -158,10 +185,13 @@ protected:
   typedef KeySet::const_iterator KeyIter;
   KeySet _keys;
 
-  //this is the magic for reweighting
+  // this is the magic for pileup reweighting
   reweight::LumiReWeighting LumiWeights_;
   /* reweight::PoissonMeanShifter PShiftUp_; */
   /* reweight::PoissonMeanShifter PShiftDown_; */
+
+  // b-tagging correction
+  BTagging fBTagging;
 
   // histogram store
   map<string, TH1D *> histo;
