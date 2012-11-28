@@ -35,7 +35,7 @@ default: std::cout << "DEBUG: " << message << std::endl; } } }
 #define ERROR(message) LOG(1, message);
 #define WARNING(message) LOG(2, message);
 #define INFO(message) LOG(3, message);
-#define DEBUG(message) LOG(10000, message);
+#define DEBUG(message) LOG(100, message);
 
 // throw an exception that tells me where the exception happened
 #define THROW(errmsg) throw (std::string( __PRETTY_FUNCTION__ )+std::string(" (file: ")+std::string( __FILE__ )+std::string(", line: ")+std::string( Form("%d", __LINE__) )+std::string(") ")+std::string(errmsg));
