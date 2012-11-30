@@ -22,7 +22,7 @@ bool BTagging::isBJet(double btag, int pdgIdPart, double pt, double eta)
   eta = TMath::Abs(eta);
   pdgIdPart = TMath::Abs(pdgIdPart);
   bool isBTagged = (btag > btag_cut);
-  if (pt < 30 || pt > 670 || eta > 2.4) {
+  if (eta > 2.4) {
     WARNING("jet properties out of allowed range in BTagging::isBJet(): pt = " << pt 
 	    << ", eta = " << eta);
     return isBTagged;
@@ -68,8 +68,15 @@ double BTagging::GetBTagScaleFactorErrorTCHEM(double pt)
       return SFb_error[i];
     }
   }
-  WARNING("pt = " << pt << " out of range " << ptmin[0] << "..." << ptmax[13]);
-  return 0;
+  // as stated on https://twiki.cern.ch/twiki/bin/viewauth/CMS/BtagPOG#2011_Data_and_MC
+  if (pt < ptmin[0]) {
+    // return constant error if pT < 30 GeV
+    return 0.12;
+  }
+  else {
+    // above 670 GeV, return twice the error from 670 GeV
+    return 2*SFb_error[sizeof(ptmin)/sizeof(double)-1];
+  }
 }
 
 double BTagging::GetBMisTagScaleFactorTCHEM(double pt, double eta, bool finebin)
@@ -87,8 +94,8 @@ double BTagging::GetBMisTagScaleFactorTCHEM(double pt, double eta, bool finebin)
       return (1.10763*((1+(-0.000105805*pt))+(7.11718e-07*(pt*pt))))+(-5.3001e-10*(pt*(pt*(pt/(1+(-0.000821215*pt))))));
     }
     else {
-      WARNING("b-tag efficiency requested for jet |eta| > 2.4");
-      return 1;
+      // same value as for eta < 2.4, but twice the uncertainty
+      return (1.10763*((1+(-0.000105805*pt))+(7.11718e-07*(pt*pt))))+(-5.3001e-10*(pt*(pt*(pt/(1+(-0.000821215*pt))))));      
     }
   }
   else {
@@ -106,12 +113,12 @@ double BTagging::GetBMisTagEfficiencyTCHEM(double pt, double eta, bool finebin)
     else if (eta < 1.6) {
       return (-0.00364137+(0.000350371*pt))+(-1.89967e-07*(pt*pt));
     }
-    else if (eta <= 2.4) {
+    else if (eta < 2.4) {
       return (-0.00483904+(0.000367751*pt))+(-1.36152e-07*(pt*pt));
     }
     else {
-      WARNING("b-tag efficiency requested for jet |eta| > 2.4");
-      return 1;
+      // same value as for eta < 2.4, but twice the uncertainty
+      return (-0.00483904+(0.000367751*pt))+(-1.36152e-07*(pt*pt));
     }
   }
   else {
@@ -170,7 +177,7 @@ void BTagging::modifyBTagsWithSF(bool & isBTagged, int pdgIdPart,
   }
   else {
     // treat everything else as unaffected by b-tagging
-    // INFO("unidentified particle " << pdgIdPart << " given to BTagging::modifyBTagsWithSF()");
+    DEBUG("unidentified particle " << pdgIdPart << " given to BTagging::modifyBTagsWithSF()");
   }
 }
 

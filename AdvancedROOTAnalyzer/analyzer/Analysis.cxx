@@ -20,6 +20,7 @@
 #include "Utilities.h"
 #include "TCutList.h"
 #include "RunLumiRanges.h"
+#include "EventFilter.h"
 
 using namespace std;
 
@@ -137,10 +138,12 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
 
   // values for smearing jet energies to obtain correct jet energy resolution
   // (JER)
+  fJER_official = fCfgFile.GetValue("JER_official", true);
   fJER_scale = fCfgFile.GetValue("JER_scale", 0.05);
   fJER_center = fCfgFile.GetValue("JER_center", 0.);
   fJER_smear = fCfgFile.GetValue("JER_smear", 20.);
 
+  INFO("fJER_official = " << fJER_official);
   INFO("fJER_scale = " << fJER_scale);
   INFO("fJER_center = " << fJER_center);
   INFO("fJER_smear = " << fJER_smear);
@@ -1154,6 +1157,10 @@ void Analysis::Loop()
 	|| !filterHBHENoise()) {
       continue;
     }
+    // @todo: filter bad HCAL laser events
+    // if (!ef->filter(global_run, global_ls, global_event)) {
+    //   continue;
+    // }
 
     Fill("cutflow", "cleaning");
     DEBUG("cutflow " << "cleaning");
@@ -1770,6 +1777,9 @@ void Analysis::CreateBranches()
   fOutputTree.Branch("fSigJet0", & fSigJet0, 32000, 0);
   fOutputTree.Branch("fSigJet1", & fSigJet1, 32000, 0);
 
+  // MET
+  fOutputTree.Branch("fJER_met_old", & fJER_met_old, "fJER_met_old/D");
+
   // fake rate
   fOutputTree.Branch("fFakeRate", & fFakeRate, "fFakeRate[2]/D");
   fOutputTree.Branch("fSingleFakeWeight", & fSingleFakeWeight, "fSingleFakeWeight/D");
@@ -2064,6 +2074,36 @@ bool Analysis::filterHBHENoise()
 #endif
 }
 
+double Analysis::GetJERScale(double eta)
+{
+  eta = TMath::Abs(eta);
+  if (fJER_official) {
+    if (eta < 0.5) {
+      return 1.052; // +-0.012+0.062-0.061
+    }
+    else if (eta < 1.1) {
+      return 1.057; // +-0.012+0.056-0.055
+    }
+    else if (eta < 1.7) {
+      return 1.096; // +-0.017+0.063-0.062
+    }
+    else if (eta < 2.3) {
+      return 1.134; // +-0.035+0.087-0.085
+    }
+    else if (eta < 5.0) {
+      return 1.288; // +-0.127+0.155-0.153 
+    }
+    else {
+      DEBUG("jet eta = " << eta << " out of range 0..5 in Analysis::GetJERScale");
+      // return some value
+      return 1.288;
+    }
+  }
+  else {
+    return fJER_scale;
+  }
+}
+
 // Jet smearing: match jets to GenJets and smear them. Propagate into MET
 void Analysis::PFJetSmearing()
 {
@@ -2109,11 +2149,12 @@ void Analysis::PFJetSmearing()
 	DEBUG("Scaled: dE = " << dE << ", scale = " << scale);
       }
       // correct MET
-      met_ex[MET_INDEX]   -= pfjet_px[j] * fJER_scale * scale;
-      met_ey[MET_INDEX]   -= pfjet_py[j] * fJER_scale * scale;
+      double rescale = GetJERScale(pfjet_eta[j])*scale;
+      met_ex[MET_INDEX]   -= pfjet_px[j] * rescale;
+      met_ey[MET_INDEX]   -= pfjet_py[j] * rescale;
 
       // correct PF jets
-      double ratio = 1. + fJER_scale * scale;
+      double ratio = 1. + rescale;
       DEBUG("ratio = " << ratio);
       pfjet_E[j]  *= ratio;
       pfjet_Et[j] *= ratio;

@@ -81,6 +81,7 @@ protected:
   Double_t fTL_njets_min;
 
   // values for smearing jet energies (JER)
+  Bool_t   fJER_official;
   Double_t fJER_scale;
   Double_t fJER_center;
   Double_t fJER_smear;
@@ -137,6 +138,7 @@ protected:
 				  const double HT);
   double GetFakeRate(double muopt, double eta, double jetpt);
   bool filterHBHENoise();
+  double GetJERScale(double eta);
   void PFJetSmearing();
   void PFJetSmearingCalculation();
 
