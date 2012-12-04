@@ -29,14 +29,14 @@ FCFLAGS       = -I/cern/pro/include -fPIC -fno-automatic -fdollar-ok -fno-backsl
 # -pg for gprof
 
 CXX           = g++
-CXXFLAGS      = -O2 -Wall -fPIC -fsignaling-nans -g -lz # -DNDEBUG # -pg for gprof
+CXXFLAGS      = -O2 -Wall -fPIC -fsignaling-nans -g # -DNDEBUG # -pg for gprof
 CXXFLAGS     += $(EXTINCDIR)   # external header files should be here
 CXXFLAGS     += $(ROOTCFLAGS)
 
 # -DVERSION=88
 
 LD            = g++
-LDFLAGS       = -O2 -fsignaling-nans -g # -pg for gprof
+LDFLAGS       = -O2 -fsignaling-nans -g -lz # -pg for gprof
 LDFLAGS      += $(ROOTGLIBS)
 LDFLAGS      += $(EXTLIBS)
 
