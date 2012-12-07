@@ -2078,25 +2078,27 @@ double Analysis::GetJERScale(double eta)
 {
   eta = TMath::Abs(eta);
   if (fJER_official) {
+    // values taken from https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
+    // but since these are scale-factors, subtracted by one
     if (eta < 0.5) {
-      return 1.052; // +-0.012+0.062-0.061
+      return 0.052; // +-0.012+0.062-0.061
     }
     else if (eta < 1.1) {
-      return 1.057; // +-0.012+0.056-0.055
+      return 0.057; // +-0.012+0.056-0.055
     }
     else if (eta < 1.7) {
-      return 1.096; // +-0.017+0.063-0.062
+      return 0.096; // +-0.017+0.063-0.062
     }
     else if (eta < 2.3) {
-      return 1.134; // +-0.035+0.087-0.085
+      return 0.134; // +-0.035+0.087-0.085
     }
     else if (eta < 5.0) {
-      return 1.288; // +-0.127+0.155-0.153 
+      return 0.288; // +-0.127+0.155-0.153 
     }
     else {
       DEBUG("jet eta = " << eta << " out of range 0..5 in Analysis::GetJERScale");
       // return some value
-      return 1.288;
+      return 0.288;
     }
   }
   else {
