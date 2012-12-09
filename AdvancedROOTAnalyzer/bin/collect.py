@@ -89,11 +89,16 @@ def join(job, period):
     # Do not join if joinFile already newer than input files
     if (joinDate > lastDate and not options.force):
         return True
+    # Change environment for ROOT if necessary (takes some time)
+    if options.rootversion_workaround:
+        command = "source /afs/cern.ch/sw/lcg/external/gcc/4.3.2/x86_64-slc5/setup.sh ; source /afs/cern.ch/sw/lcg/app/releases/ROOT/5.32.01/x86_64-slc5-gcc43-opt/root/bin/thisroot.sh ; hadd -f "
+    else:
+        command = "hadd -f "
     # now join
     if isinstance (filelist, str):
-        os.system("hadd -f " + job + ".root " + " " + filelist)
+        os.system(command + job + ".root " + " " + filelist)
     else:
-        os.system("hadd -f " + job + ".root " + " ".join(filelist))
+        os.system(command + job + ".root " + " ".join(filelist))
     return True
 
 def rm(job, period):
@@ -174,6 +179,7 @@ jobgroup will be checked and joined."""
         options.pattern = args[2]
 
     # Check ROOT version
+    options.rootversion_workaround = False
     rootversion = ara.getCommandOutput2("root-config --version");
     first = rootversion.split("/")[0]
     fix   = rootversion.split("/")[1]
@@ -182,7 +188,8 @@ jobgroup will be checked and joined."""
     if major < 5 or (major == 5 and minor < 32):
         print "You are using to old root version", rootversion
         print "You need to use at least ROOT 5.32.00 for hadd to work correctly"
-        print "All your histograms filled by text strings will be wrong"
+        print "Enabling workaround for calling hadd"
+        options.rootversion_workaround = True
 
     errors = False
     try:
