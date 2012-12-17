@@ -164,7 +164,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
     // reweight, since the pileup description is wrong
     INFO("Processing sample with bad pu_num_int[], not reweighting");
     if (fPileupReweighting) {
-      WARNING("Overriding configuration option \"PileupReweighting\"");
+      INFO("Overriding configuration option \"PileupReweighting\"");
     }
     fPileupReweighting = false;
   }
@@ -531,19 +531,10 @@ void Analysis::SignalStudy()
 	continue;
       }
       TLorentzVector mu_gen(truthl_px[i], truthl_py[i], truthl_pz[i], truthl_E[i]);
-      int matched = -1;
       for (int j = 0; j < muo_n; j++) {
-	TLorentzVector mu_rec(muo_px[j], muo_py[j], muo_pz[j], muo_E[j]);
-	if (mu_gen.DeltaR(mu_rec) < 0.3)
-	  matched = j;
-      }
-      // We are interested in those we did not reconstruct, i.e. cannot match
-      if (matched != -1) {
-	// just make sure SUSYana likes me :-)
-	if (muo_truth[matched] != i) {
-	  WARNING("SUSYAna vs findsusyb3 MC truth muon matching difference");
-	}
-	continue;
+	// does this reco muon have a match to the gen lepton?
+	if (muo_truth[j] == i)
+	  continue;
       }
       Fill("Sig_LostMuEta", truthl_eta[i]);
       Fill("Sig_LostMuPt", truthl_pt[i]);
@@ -753,7 +744,13 @@ void Analysis::Loop()
     fSigJet0->SetXYZT(0, 0, 0, 0);
     fSigJet1->SetXYZT(0, 0, 0, 0);
     if (fInputType == "signal" || fInputType == "background") {
-      SignalStudy();
+      try {
+	SignalStudy();
+      }
+      catch (std::string message) {
+	WARNING(message);
+	continue;
+      }
       // take only signal events or background events if requested
       if ((fInputType == "signal" && !fIsSignal) || (fInputType == "background" && fIsSignal))
 	continue;
