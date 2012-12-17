@@ -1333,6 +1333,8 @@ void Analysis::Loop()
     *fGaugino = *fMuon1+*fJet0+*fJet1;
     *fSmuon = *fMuon0+*fGaugino;
     double m_mumu = (*fMuon0+*fMuon1).M();
+    double GauginoMass = fGaugino->M();
+    double SmuonMass = fSmuon->M();
 
     // needed because no Drell-Yan MC for m(mu,mu) < 10. GeV
     // M(mu, mu)
@@ -1378,6 +1380,24 @@ void Analysis::Loop()
 	// CR3: large MET and btag veto control region
 	Fill("CR3_m_mumu", m_mumu);
       }
+      if ((muo_charge[fMuoId[0]]*muo_charge[fMuoId[1]]) == 1) {
+	// CR4: large MET, same charge cut
+	Fill("CR4_m_mumu", m_mumu);
+	Fill("CR4_m_smuon", SmuonMass);
+	Fill("CR4_m_gaugino", GauginoMass);
+	if (fIsBTagged0 || fIsBTagged1) {
+	  // CR5: large MET, same charge and btag enhanced control region
+	  Fill("CR5_m_mumu", m_mumu);
+	  Fill("CR5_m_smuon", SmuonMass);
+	  Fill("CR5_m_gaugino", GauginoMass);
+	}
+	else {
+	  // CR6: large MET, same charge and btag veto control region (signal-like)
+	  Fill("CR6_m_mumu", m_mumu);
+	  Fill("CR6_m_smuon", SmuonMass);
+	  Fill("CR6_m_gaugino", GauginoMass);
+	}
+      }
       continue;
     }
     Fill("cutflow", "met");
@@ -1413,8 +1433,6 @@ void Analysis::Loop()
     Fill("cutflow", "charge");
     DEBUG("cutflow " << "charge");
 
-    double GauginoMass = fGaugino->M();
-    double SmuonMass = (*fMuon0+*fGaugino).M();
     Fill("m_mumu", m_mumu);
     Fill("m_gaugino", GauginoMass);
     Fill("m_smuon", SmuonMass);
@@ -1697,15 +1715,24 @@ void Analysis::CreateHistograms()
   CreateHisto("DeltaPhi", "#Delta#phi(#mu_{1}, gaugino)", 315, 0., 3.15);
   CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
+  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("CR1_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR2_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR3_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR1_btag0", "CR1 jet0 btag", 120, -20, 40);
   CreateHisto("CR1_btag1", "CR1 jet1 btag", 120, -20, 40);
   CreateHisto("CR1_btag", "CR1 jet1 btag:CR1 jet0 btag", 30, -10, 20, 30, -10, 20);
-  CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
-  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
-  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("CR2_m_mumu", "CR2 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("CR3_m_mumu", "CR3 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("CR4_m_mumu", "CR4 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("CR4_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
+  CreateHisto("CR4_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("CR5_m_mumu", "CR5 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("CR5_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
+  CreateHisto("CR5_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("CR6_m_mumu", "CR6 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("CR6_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
+  CreateHisto("CR6_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
 
   CreateHisto("btag0", "jet0 btag", 120, -20, 40);
   CreateHisto("btag1", "jet1 btag", 120, -20, 40);
