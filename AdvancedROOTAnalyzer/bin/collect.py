@@ -180,14 +180,13 @@ jobgroup will be checked and joined."""
 
     # Check ROOT version
     options.rootversion_workaround = False
-    rootversion = ara.getCommandOutput2("root-config --version");
+    rootversion = ara.getCommandOutput2("root-config --version").strip()
     first = rootversion.split("/")[0]
     fix   = rootversion.split("/")[1]
     major = int( first.split(".")[0])
     minor = int( first.split(".")[1])
     if major < 5 or (major == 5 and minor < 32):
-        print "You are using to old root version", rootversion
-        print "You need to use at least ROOT 5.32.00 for hadd to work correctly"
+        print "You are using an old root version", rootversion
         print "Enabling workaround for calling hadd"
         options.rootversion_workaround = True
 

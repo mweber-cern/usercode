@@ -145,7 +145,11 @@ def setupInbox():
     os.system("mkdir -p " + myDir)
 
     # copy config file in place
-    src = os.environ['ARASYS'] + '/config/analyzer_' + options.analysiscfg + '.cfg'
+    if options.analysiscfg:
+        filename = options.selection
+    else:
+        filename = "default"
+    src = os.environ['ARASYS'] + '/config/analyzer_' + filename + '.cfg'
     dest = myDir + '/analyzer.cfg'
     shutil.copy(src, dest)
     inbox.append(dest)
@@ -193,9 +197,9 @@ will be submitted."""
     optParser.add_option("-s", "--split", dest="nsplit",
                          help="split each process into this number of jobs",
                          default=defaultsplit)
-    optParser.add_option("-a", "--analysis-config", dest="analysiscfg",
-                         help="analysis configuration file (default: '"+defaultanalysiscfg+"')",
-                         default=defaultanalysiscfg)
+    optParser.add_option("-a", "--analysis-config", action="store_true", 
+                         dest="analysiscfg",
+                         help="Take analysis configuration file named like selection")
                          
 
     global options

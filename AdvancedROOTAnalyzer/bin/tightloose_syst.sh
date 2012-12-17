@@ -18,18 +18,6 @@ The suffix determines which jobs to start:
 EOF
 }
 
-newroot()
-{
-    source /afs/cern.ch/sw/lcg/external/gcc/4.3.2/x86_64-slc5/setup.sh 
-    source /afs/cern.ch/sw/lcg/app/releases/ROOT/5.32.01/x86_64-slc5-gcc43-opt/root/bin/thisroot.sh
-}
-
-oldroot()
-{
-    cd ~/CMSSW_4_2_8_patch7/src
-    eval `scramv1 runtime -sh`
-}
-
 mycollect()
 {
    # skip configuration file
@@ -37,14 +25,9 @@ mycollect()
    then
        shift ; shift
    fi
-   newroot 
-   echo collect.py -f $1 $2 
-   collect.py -f $1 $2 ;
-   oldroot
    collect.py -r $1 $2 
-   sleep 600 
-   newroot 
-   collect.py $1 $2
+#   sleep 600 
+#   collect.py $1 $2
 }
 
 action()
@@ -118,15 +101,15 @@ fi
 #    action -a ${TYPE} ${TYPE}
 #done
 
-# systematics for a possible trigger bias
-for trigger in singlemu mu8_jet40
-do
-    TYPE=triggerbias_${trigger}_pileup${SUFFIX}
-    echo "Start submitting ${TYPE}" >> ${LOGFILE}
-    if [[ ${SUFFIX} == "" ]] ; then
-	JOBGROUP="${trigger}"
-    else
-	JOBGROUP=""
-    fi
-    action -a ${TYPE} ${TYPE} ${JOBGROUP}
-done
+## systematics for a possible trigger bias
+#for trigger in singlemu mu8_jet40
+#do
+#    TYPE=triggerbias_${trigger}_pileup${SUFFIX}
+#    echo "Start submitting ${TYPE}" >> ${LOGFILE}
+#    if [[ ${SUFFIX} == "" ]] ; then
+#	JOBGROUP="${trigger}"
+#    else
+#	JOBGROUP=""
+#    fi
+#    action -a ${TYPE} ${TYPE} ${JOBGROUP}
+#done
