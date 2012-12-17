@@ -180,7 +180,7 @@ def grep_file(filename, tokens, verbose=True):
             for line in data:
                 print line
     if rc == 2:
-        raise Exception("Error executing grep \"query\" % for file %s " % (searchfor, filenam))
+        raise Exception("Error executing grep \"query\" % for file %s " % (searchfor, filename))
     return found
 
 def check_log(logfilename, errors, warnings, requirements):

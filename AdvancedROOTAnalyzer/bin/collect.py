@@ -36,7 +36,7 @@ def check(job, period):
     # Find all job files from directory
     jobfiles = []
     for filename in os.listdir(myDir):
-        if job in filename and "_condor.cfg" in filename:
+        if filename.startswith(job+'_') and filename.endswith("_condor.cfg"):
             jobfiles.append(filename[:filename.find("_condor.cfg")])
 
     if len(jobfiles) == 0:
