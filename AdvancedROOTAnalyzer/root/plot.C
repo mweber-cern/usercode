@@ -19,6 +19,7 @@ Int_t           gLogLevel = 3;
 TEnv          * gConfig = 0;
 Int_t           gMaxProcess = 0;
 TCanvas       * gCanvas = 0;
+Int_t           nPad = 0;
 Bool_t          gGerman = kFALSE;
 Bool_t          gAutoOrder = kTRUE;
 Int_t           gMaxPeriod = 0;
@@ -451,6 +452,10 @@ void setup(const char * configFileName)
 
 void cd(Int_t canvas)
 {
+  if (canvas < 1 || canvas > gMaxPad) {
+    ERROR("argument \"canvas\" needs to be between 1 and " << gMaxPad);
+    return;
+  }
   // switch to corresponding canvas
   if (!gCanvas)
     return;
@@ -464,6 +469,7 @@ void MakeCanvas(Int_t dx, Int_t dy)
   if (gCanvas) {
     delete gCanvas;
     gCanvas = 0;
+    nPad = 0;
   }
 
   // determine x and y sizes
@@ -492,6 +498,7 @@ void MakeCanvas(Int_t dx, Int_t dy)
   // make subpads and activate first pad
   gPadNr = 0;
   gCanvas->Divide(dx, dy);
+  nPad = dx*dy;
   cd(gPadNr+1);
 }
 
@@ -1795,7 +1802,9 @@ void auto_order()
 	  continue;
 	sum += gHisto[gPadNr][j]->Integral();
       }
-      integral[i] = sum;
+      // set integral to a small default value keeping a meaningful order if
+      // all histograms are zero
+      integral[i] = sum+(gMaxProcess-i)*1e-10;
     }
     DEBUG(gProcess[i].fname << ": " << integral[i]);
   }
@@ -2004,7 +2013,7 @@ void plot2(const char * hname, const TH2D * hsample, const char * selection,
       continue;
     }
     if (gHisto2[process]->Integral() == 0) {
-      ERROR("Empty histogram found for process " <<  process);
+      DEBUG("Empty histogram found for process " <<  process);
       continue;
     }
     nMC++;
@@ -2185,6 +2194,41 @@ TH1D * getHisto(const char * name, bool match, int min, int max)
   return hMC;
 }
 
+TH2D * getHisto2(const char * name, bool match, int min, int max)
+{
+  // sum up all histograms that match the given name, starting from min up to
+  // (but not including) max.
+  // 
+  // If match is true all individual signal histograms whose file name
+  // contains "name" are summed up. If match is false, all individual signal
+  // histograms but those whose file name matches "name" are taken. If name ==
+  // 0, all histograms are taken.  
+  // 
+  // Can be used e.g. for fitting (see xsection.C)
+
+  TH2D * hMC = 0;
+  // loop over all processes in given range
+  for (Int_t j = min; j < max; j++) {
+    TH2D * histo = gHisto2[j];
+    if (histo == 0)
+      continue;
+    TString s(gProcess[j].fname);
+    if (name != 0 && ((match && !s.Contains(name)) || (!match && s.Contains(name)))) {
+      DEBUG("skipping process " << s);
+      continue;
+    }
+    DEBUG("adding process " << s);
+    if (hMC == 0) {
+      hMC = new TH2D(*histo);
+      hMC->SetDirectory(0);
+    }
+    else {
+      hMC->Add(histo, 1);
+    }
+  }
+  return hMC;
+}
+
 TH1D * signalHisto(const char * name, bool match)
 {
   // Return a histogram containing only signal. If match is true all
@@ -2211,6 +2255,12 @@ TH1D * backgroundHisto(const char * name, bool match)
   return getHisto(name, match, gMaxSignal, gMaxProcess-1);
 }
 
+TH2D * backgroundHisto2(const char * name, bool match)
+{
+  // same as above, but for 2D
+  return getHisto2(name, match, gMaxSignal, gMaxProcess-1);
+}
+
 TH1D * dataHisto()
 {
   // creates a histogram containing only data, extracted from global
@@ -2222,6 +2272,20 @@ TH1D * dataHisto()
   hData->SetDirectory(0);
   return hData;
 }
+
+TH2D * dataHisto2()
+{
+  // creates a histogram containing only data, extracted from global
+  // histograms gStack[gPadNr][]. Can be used e.g. for fitting (see xsection.C)
+  TH2D * histo = gHisto2[gMaxProcess-1];
+  if (histo == 0)
+    return 0;
+  TH2D * hData = new TH2D(*histo);
+  hData->SetDirectory(0);
+  return hData;
+}
+
+
 
 void smooth(TH1D * histo, Double_t xlow, Double_t xup, Int_t nbins)
 {
@@ -2296,4 +2360,13 @@ TH1D * join(Int_t nhistos, TH1D * histo[])
     binindex += histo[n]->GetNbinsX();
   }
   return hnew;
+}
+
+// execute the same command (given as string) on all plots in current canvas
+void all(const char * command)
+{
+  for (int pad = 0; pad < nPad; pad++) {
+    cd(pad+1);
+    gROOT->ProcessLine(command);
+  }
 }
