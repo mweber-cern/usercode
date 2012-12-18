@@ -66,7 +66,10 @@ extern Int_t          gStage;
 
 // max. number of subpads in canvas
 const  Int_t          gMaxPad = 9;
+// current active pad
 extern Int_t          gPadNr;
+// current number of pads in canvas
+extern Int_t          nPad;
 
 // the histograms for each process
 extern TH1D        ** gHisto[gMaxPad];   // size gMaxProcess, unstacked histograms
@@ -185,9 +188,12 @@ void plotadd(const char * name1, const char * name2,
 TH1D * getHisto(const char * name = 0, bool match = true, int min=0, int max = gMaxProcess-1);
 TH1D * signalHisto(const char * name = 0, bool match = true);
 TH1D * backgroundHisto(const char * name = 0, bool match = true);
+TH2D * backgroundHisto2(const char * name = 0, bool match = true);
 TH1D * dataHisto();
+TH2D * dataHisto2();
 
 // technical stuff used by other macros, do not use directly
+char * strdup_new(const char * text);
 void setopt(TStyle * style);
 void setopt(TCanvas * canvas);
 void setopt(TH1 * histo);
