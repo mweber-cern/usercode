@@ -1,8 +1,8 @@
-#ifndef __CINT__
-
 #include <iostream>
+#include <iomanip>
 
-#include "plot.h"
+#include "rpv.h"
+
 #include "TMath.h"
 #include "TROOT.h"
 #include "TFile.h"
@@ -10,8 +10,8 @@
 #include "TF1.h"
 #include "TH2D.h"
 #include "TH1D.h"
-
-#endif // __CINT__
+#include "plot.h"
+#include "fakerate.h"
 
 using namespace std;
 
@@ -564,6 +564,23 @@ void compute_energy_resolution()
   l->Draw();
 }
 
+// fit width of energy distribution
+void compute_energy_resolution_offset() 
+{
+  plot("JER_deltae");
+  TH1D * back = backgroundHisto();
+  TF1 * f1 = new TF1("f1", "[0]*TMath::BreitWigner(x,[1],[2])", -50, 50);
+  f1->SetParameter(0, back->Integral());
+  f1->SetParameter(1, back->GetMean());
+  f1->SetParameter(2, back->GetRMS());
+  // do a log-likelihood fit (ll), do not plot result (0), and use function range (R)
+  back->Fit("f1", "R");
+  f1->SetLineColor(kBlue);
+  f1->SetLineWidth(2.);
+  f1->Draw("same");
+}
+
+
 void plotlinlog(const char * name)
 {
   cd(1);
@@ -595,15 +612,15 @@ void mc_comparison()
 void signal_xcheck()
 {
   gStyle->SetPadRightMargin(0.2);
-  selection("default18");
   plot2("m_smu_chi");
   MakeCanvas(1,1);
+  TH2D * hBack = 0;
   // plot background(s)
   for (int i = 0; i < gMaxProcess-1; i++) {
     if (!strncmp("ttjets", gProcess[i].fname, 6)) {
-	TH2D * hBack = gHisto2[i];
-	hBack->SetAxisRange(0, 1000);
-	hBack->Draw("colz");
+      hBack = gHisto2[i];
+      hBack->SetAxisRange(0, 1000);
+      hBack->Draw("colz");
     }
   }
   // // plot signal(s)
@@ -658,4 +675,138 @@ void limitplot(const char * fname = "XscLimitsAndErrorsRooStats.txt")
   }
   h1->Draw();
   gPad->Print("limit.pdf");
+}
+
+void twoplots(const char * sel1, const char * sel2, const char * hname)
+{
+  selection(sel1);
+  cd(1);
+  plot(hname);
+  selection(sel2);
+  cd(2);
+  plot(hname);  
+}
+
+void selectionplots()
+{
+  MakeCanvas();
+  cd(1);
+  plot("cutflow");
+  min(1);
+  logy();
+  legend();
+}
+
+void controlplots(const char * sel) 
+{
+  selection(sel);
+  plot("pfmet");
+  zoom(0,150);
+  legend();
+  cd(2); 
+  plot("CR1_m_mumu");
+  zoom(0,200);
+  legend();
+  print(Form("JER_%s.pdf", sel));
+  cd(1);
+  plot("CR2_m_mumu");
+  zoom(0,200);
+  legend();
+  cd(2);
+  plot("CR3_m_mumu"); 
+  zoom(0,200); 
+  legend();
+  print(Form("JER_%s_btag.pdf", sel));
+
+  // final control region
+  cd(1); 
+  plot("CR5_m_smuon");
+  zoom(0,200);
+  legend();
+  cd(2);
+  plot("CR6_m_smuon");
+  zoom(0,200);
+  legend();
+  print(Form("CR_final_%s.pdf", sel));
+}
+
+/** From the given histogram, which is required to have 3x3 bins, extract the
+ *  lower-diagonal bin entries and errors and store them in the given array of
+ *  doubles, where the first entry for each bin is the content and the second
+ *  entry the error. */
+void get2dstatistics(const TH2D * h2, double values[6][2])
+{
+  // plot histograms
+  // loop over all histograms
+  double N = 0;
+  double e2 = 0;
+  if (h2 == 0) {
+    WARNING("Given histogram pointer is zero");
+    return;
+  }
+  if (h2->GetNbinsX() != 3 || h2->GetNbinsY() != 3) {
+    ERROR("Wrong number of bins in histogram in get2dstatistics()");
+    return;
+  }
+  int bin = 0;
+  for (int binx = 1; binx <= h2->GetNbinsX(); binx++) {
+    for (int biny = 1; biny <= binx; biny++) {
+      // cout << "binx = " << binx << ", biny = " << biny << endl;
+      cout << "x=" << setw(4) << h2->GetXaxis()->GetBinLowEdge(binx) 
+  	   << ".." << setw(4) << h2->GetXaxis()->GetBinUpEdge(binx) << ", ";
+      cout << "y=" << setw(4) << h2->GetYaxis()->GetBinLowEdge(biny) 
+  	   << ".." << setw(4) << h2->GetYaxis()->GetBinUpEdge(biny) << ", ";
+      double n = h2->GetBinContent(binx, biny);
+      double e = h2->GetBinError(binx, biny);
+      N += n;
+      e2 += e*e;
+      cout << setw(4) << "N = " << n << " +/- " << e << endl;
+      values[bin][0] = n; // value
+      values[bin][1] = e; // error
+      bin++;
+    }
+  }
+  cout << "Total: " << N << " +/- " << TMath::Sqrt(e2) << endl;
+  cout << "From histo: " << h2->Integral() << endl;
+}
+
+void paperplots(const char * sel)
+{
+  // make plots for AN and paper
+  selection(sel);
+
+  // T/L ratio selection
+  tightlooseplots();
+  
+  // Fakes (signal region)
+  TH1D * h_smuon = fake_estimate_1d(sel, "btag_m_smuon");
+  cd(1); 
+  rebin(5); 
+  legend(); 
+  gPad->Print("singlefake.pdf"); 
+  cd(2); 
+  rebin(5); 
+  legend(); 
+  gPad->Print("doublefake.pdf");
+
+  // save fakes to a file
+  TH1D * h_gaugino = fake_estimate_1d(sel, "btag_m_gaugino");
+  TFile * f = new TFile("fakes.root", "RECREATE");
+  h_smuon->SetName("h1_6_jjmm_m");
+  h_smuon->Write();
+  h_gaugino->SetName("h1_6_jjm_m");
+  h_gaugino->Write();
+  f->Close();
+  delete f;
+
+  // Fakes (control region)
+  fake_estimate_1d(sel, "CR6_m_smuon");
+  cd(1); 
+  rebin(5); 
+  legend(); 
+  gPad->Print("CR_singlefake.pdf"); 
+  cd(2); 
+  rebin(5); 
+  legend(); 
+  gPad->Print("CR_doublefake.pdf");
 }

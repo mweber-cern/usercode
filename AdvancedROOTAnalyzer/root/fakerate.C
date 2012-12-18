@@ -16,6 +16,7 @@ using namespace std;
 #include "TTree.h"
 #include "TKey.h"
 
+#include "fakerate.h"
 #include "plot.h"
 #include "stat.h"
 #include "xsection.h"
@@ -362,7 +363,14 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
     hRatio2->SetTitleOffset(2.5, "Z");
     hRatio2->Draw("lego2");
     hRatio2->SetMaximum(1.0);
+
+    // print lego plot to file
+    TCanvas * c2 = new TCanvas("c2", "canvas for printing", 0, 0, Int_t(640.*TMath::Sqrt(2.)), 640);
+    setopt(c2);
+    hRatio2->Draw("lego2");
+    hRatio2->SetMaximum(1.0);    
     gPad->Print("tlratio2d.pdf");
+    delete c2;
   }
 
   // compute 1D ratio
@@ -570,7 +578,7 @@ void tight_loose_ratioplot()
   leg->Draw();
 }
 
-void tightlooseplots(int start = 1, int end = 5)
+void tightlooseplots(int start, int end)
 {
   for (int i = start; i <= end; i++) {
     switch (i) {
@@ -699,20 +707,36 @@ void doublefakeplots(const char * sele = "doublefake")
   print("doublefake_3.pdf");
 }
 
+// background
+const char * removeNames[] = {
+  "wwjets",
+  "wzjets",
+  "zzjets",
+  "wwdoubleparton",
+  "wpluswplus",
+  "wminuswminus",
+  "ttwplus",
+  "ttwminus",
+  "ttz",
+  "www",
+  "wwz",
+  "wzz",
+  "zzz",
+  "dyll"
+};
+
 /* Get a fake estimate from the given histogram, i.e. return Data - MC.
  *
  * Subtract all background MCs from data but the one specified with
  * "notremove". Under- and overflows are ignored in computation.
  *
  * @param hname     Histogram name from which to compute estimate
- * @param notremove Process name that is not going to be removed when subtracting MC
- * @return pair of values, where first is value and second is error
+ * @return          Histogram of fakes
  */
-std::pair<double,double> get_fakes(const char * hname, const char * notremove)
+TH1D * get_fakes_1d(const char * hname)
 {
   // get number of single fakes from data histogram
   plot(hname);
-  rebin(5);
   legend();
   TH1D * hData = dataHisto();
   if (hData == 0) {
@@ -722,90 +746,133 @@ std::pair<double,double> get_fakes(const char * hname, const char * notremove)
   double N = hData->Integral();
   INFO("Data events: " << N);
 
-  // background
-  TH1D * hSub = backgroundHisto(notremove, false);
-  if (hSub == 0) {
-    THROW("get_fakes() needs a background histogram");
+  TH1D * hBack = 0;
+  for (unsigned int i = 0; i < sizeof(removeNames)/sizeof(void *); i++) {
+    TH1D * hSub = backgroundHisto(removeNames[i]);
+    if (hSub == 0) {
+      THROW(string("get_fakes() problem getting background ")+removeNames[i]);
+    }
+    // add backgrounds together
+    if (hBack == 0) {
+      hBack = hSub;
+    }
+    else {
+      hBack->Add(hSub);
+      delete hSub;
+    }
   }
-  N = hSub->Integral();
+  N = hBack->Integral();
   INFO("Background events : " << N);
 
   // subtract
-  hData->Add(hSub, -1.);
+  hData->Add(hBack, -1.);
   // temporarily needed for function call
-  double error;
-  N = hData->IntegralAndError(1, hData->GetNbinsX(), error);
-  INFO("Single fakes: " << N << " +/- " << error);
-
-  std::pair <double,double> result;
-  result.first = N;
-  result.second = error;
-  return result;
+  delete hBack;
+  return hData;
 }
 
-/** Estimate number of single fakes.
+/* Get a fake estimate from the given histogram, i.e. return Data - MC.
  *
- * Removes all MCs from data but wjets (which is estimated by this)
- *
- * @param hname     Histogram name from which to compute estimate
- * @return pair of values, where first is value and second is error
- *
- * @bug This also removes wwjets but contribution is negligible.
- */
-std::pair <double,double> get_singlefakes(const char * hname)
-{
-  return get_fakes(hname, "wjets");
-}
-
-
-/** Estimate number of double fakes.
- *
- * Removes all MCs from data but qcd (which is estimated by this)
+ * Subtract all background MCs from data but the one specified with
+ * "notremove". Under- and overflows are ignored in computation.
  *
  * @param hname     Histogram name from which to compute estimate
- * @return pair of values, where first is value and second is error
- *
+ * @return          Histogram of fakes
  */
-std::pair <double,double> get_doublefakes(const char * hname)
+TH2D * get_fakes_2d(const char * hname)
 {
-  return get_fakes(hname, "qcd");
+  // get number of single fakes from data histogram
+  plot2(hname);
+  TH2D * hData = dataHisto2();
+  if (hData == 0) {
+    THROW("get_fakes() needs a data histogram");
+  }
+  // data
+  double N = hData->Integral();
+  INFO("Data events: " << N);
+
+  TH2D * hBack = 0;
+  for (unsigned int i = 0; i < sizeof(removeNames)/sizeof(void *); i++) {
+    TH2D * hSub = backgroundHisto2(removeNames[i]);
+    if (hSub == 0) {
+      THROW(string("get_fakes() problem getting background ")+removeNames[i]);
+    }
+    // add backgrounds together
+    if (hBack == 0) {
+      hBack = hSub;
+    }
+    else {
+      hBack->Add(hSub);
+      delete hSub;
+    }
+  }
+  N = hBack->Integral();
+  INFO("Background events : " << N);
+
+  // subtract
+  hData->Add(hBack, -1.);
+  // temporarily needed for function call
+  delete hBack;
+  return hData;
 }
 
 /** Estimate single- and double-fakes and derive number of QCD and W+jets
- * events (N_), and corresponding errors on them (R_).
+ * events (N_), and corresponding errors on them (R_), in one dimension.
  *
  */
-void fake_estimate(const char * sel, const char * hname, 
-		   double & N_W, double & N_QCD,
-                   double & R_W, double & R_QCD)
+TH1D * fake_estimate_1d(const char * sel, const char * hname)
 {
   MakeCanvas();
   selection(Form("%s_singlefake", sel));
   cd(1);
-  std::pair<double,double> N_sf = get_singlefakes(hname);
+  TH1D * h_sf = get_fakes_1d(hname);
+  double N_sf, R_sf;
+  N_sf = h_sf->IntegralAndError(1, h_sf->GetNbinsX(), R_sf);
+  INFO("N_sf = " << N_sf << " +/- " << R_sf);
   selection(Form("%s_doublefake", sel));
   cd(2);
-  std::pair<double,double> N_df = get_doublefakes(hname);
-  print(Form("%s-fake_estimate.pdf", sel));
-  INFO("N_sf = " << N_sf.first << " +/- " << N_sf.second);
-  INFO("N_df = " << N_df.first << " +/- " << N_df.second);
+  TH1D * h_df = get_fakes_1d(hname);
+  double N_df, R_df;
+  N_df = h_df->IntegralAndError(1, h_df->GetNbinsX(), R_df);
+  // output to screen
+  INFO("N_df = " << N_df << " +/- " << R_df);
+  // print
+  print(Form("%s-%s-fake_estimate.pdf", sel, hname));
   // subtract double fakes from single fakes
-  N_W   = N_sf.first - N_df.first;
-  R_W   = TMath::Sqrt(q(N_sf.second)-q(N_df.second));
-  N_QCD = N_df.first;
-  R_QCD = N_df.second;
-  INFO("QCD    events: " << N_QCD << " +/- " << R_QCD);
-  INFO("W+jets events: " << N_W << " +/- " << R_W);
+  double N_fakes   = N_sf - N_df;
+  // errors are 100% correlated - at least theoretically
+  // experimentally not, since they are determined from different samples
+  double R_fakes   = TMath::Sqrt(q(R_sf)+q(R_df));
+  INFO("Fakes: " << N_fakes << " +/- " << R_fakes);
+  h_sf->Add(h_df, -1.);
+  return h_sf;
 }
 
-void fake_estimate(const char * sel, const char * hname)
+/** Estimate single- and double-fakes and derive number of QCD and W+jets
+ * events (N_), and corresponding errors on them (R_), in two dimensions.
+ *
+ */
+TH2D * fake_estimate_2d(const char * sel, const char * hname)
 {
-  double N_W;
-  double N_QCD;
-  double R_W;
-  double R_QCD;
-  
-  fake_estimate(sel, hname, N_W, N_QCD, R_W, R_QCD);
+  selection(Form("%s_singlefake", sel));
+  TH2D * h_sf = get_fakes_2d(hname);
+  double N_sf, R_sf;
+  N_sf = h_sf->IntegralAndError(1, h_sf->GetNbinsX(), 1, h_sf->GetNbinsY(), R_sf);
+  INFO("N_sf = " << N_sf << " +/- " << R_sf);
+  selection(Form("%s_doublefake", sel));
+  TH2D * h_df = get_fakes_2d(hname);
+  double N_df, R_df;
+  N_df = h_df->IntegralAndError(1, h_df->GetNbinsX(), 1, h_df->GetNbinsY(), R_df);
+  // output to screen
+  INFO("N_df = " << N_df << " +/- " << R_df);
+  // subtract double fakes from single fakes
+  double N_fakes   = N_sf - N_df;
+  // errors are 100% correlated - at least theoretically
+  // experimentally not, since they are determined from different samples
+  double R_fakes   = TMath::Sqrt(q(R_sf)+q(R_df));
+  INFO("Fakes: " << N_fakes << " +/- " << R_fakes);
+  h_sf->Add(h_df, -1.);
+  return h_sf;
 }
 
 struct syst_struct {
@@ -819,14 +886,12 @@ void fakerate_systematics(int istart = 0, int iend = 999)
   const char * hname = "m_smuon";
 
   // reference values from standard analysis
-  double N_W_ref;
-  double N_QCD_ref;
-  double R_W_ref;
-  double R_QCD_ref;
 
   // get default values
   setup("../config/plot.cfg");
-  fake_estimate("default13", hname, N_W_ref, N_QCD_ref, R_W_ref, R_QCD_ref);
+  TH1D * hReferenceFakes = fake_estimate_1d("default13", hname);
+  double N_ref, R_ref; // N and RMS
+  N_ref = hReferenceFakes->IntegralAndError(1, hReferenceFakes->GetNbinsX(), R_ref);
 
   // list of systematics
   const int nMax = 10;
@@ -846,28 +911,36 @@ void fakerate_systematics(int istart = 0, int iend = 999)
     { "triggerbias_mu8_jet40", "_mu8_jet40" }
   };
 
-  // event counters (N) and RMS (R)
-  double N_W[nMax];
-  double N_QCD[nMax];
-  double R_W[nMax];
-  double R_QCD[nMax];
-
   // get all numbers
+  TH1D * hFakes[nMax] = { 0 };
   for (int i = istart; i < TMath::Min(iend, nMax); i++) {
     setup(Form("../config/plot%s.cfg", sel[i].cfg));
-    fake_estimate(sel[i].sel, hname, N_W[i], N_QCD[i], R_W[i], R_QCD[i]);
+    hFakes[i] = fake_estimate_1d(sel[i].sel, hname);
   }
 
   // compute differences
   for (int i = istart; i < TMath::Min(iend, nMax); i++) {
-    N_QCD[i] -= N_QCD_ref;
-    R_QCD[i]  = TMath::Sqrt(TMath::Abs(q(R_QCD[i])-q(R_QCD_ref)));
-    N_W[i]   -= N_W_ref;
-    R_W[i]    = TMath::Sqrt(TMath::Abs(q(R_W[i])-q(R_W_ref)));
+    double N = 0, R = 0; // N and RMS
+    if (hFakes[i]) {
+      N = hFakes[i]->IntegralAndError(1, hFakes[i]->GetNbinsX(), R);
+      delete hFakes[i];
+    }
+    else {
+      ERROR("could not get fakes for selection " << sel[i].sel);
+      continue;
+    }
+    N -= N_ref;
+    R = TMath::Sqrt(TMath::Abs(q(R_ref)-q(R)));
     // output table line
     cout << sel[i].sel << ": " 
-	 << "QCD = " << 100.*N_QCD[i]/N_QCD_ref << " +- " << 100*R_QCD[i]/N_QCD_ref << "%, " 
-	 << "W = " << 100.*N_W[i]/N_W_ref << " +- " << 100*R_W[i]/N_W_ref << "%" << endl;
+	 << "N = " << 100.*N/N_ref << " +- " << 100*R/N_ref << "%" << endl;
   }
-  
 }
+
+// when script is executed, run this command
+void fakerate(const char * sel)
+{
+  selection(sel);
+  get_subtracted_tight_loose_ratio();
+}
+

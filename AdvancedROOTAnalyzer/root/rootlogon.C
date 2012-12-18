@@ -14,6 +14,8 @@
   gROOT->LoadMacro(Form("%s/root/stat.C+", getenv("ARASYS")));
   gROOT->LoadMacro(Form("%s/root/xsection.C+", getenv("ARASYS")));
   gROOT->LoadMacro(Form("%s/root/fakerate.C+", getenv("ARASYS")));
+  gROOT->LoadMacro(Form("%s/root/rpv.C+", getenv("ARASYS")));
+  gROOT->LoadMacro(Form("%s/root/systematics.C+", getenv("ARASYS")));
 
   // set up everything
   setup("../config/plot.cfg");
