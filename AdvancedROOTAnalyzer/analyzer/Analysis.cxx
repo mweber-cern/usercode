@@ -749,7 +749,6 @@ void Analysis::Loop()
       }
       catch (std::string message) {
 	WARNING(message);
-	continue;
       }
       // take only signal events or background events if requested
       if ((fInputType == "signal" && !fIsSignal) || (fInputType == "background" && fIsSignal))
@@ -1344,17 +1343,18 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // B-tagging
-
-    fBtag0 = pfjet_btag[jets[0]];
-    fBtag1 = pfjet_btag[jets[1]];
-    Int_t truth = pfjet_truth[jets[0]]; 
-    fIsBTagged0 = fBTagging.isBJet(fBtag0, truth < 0 ? 0 : truth_pdgid[truth],
-				   pfjet_pt[jets[0]], pfjet_eta[jets[0]]);
-    truth = pfjet_truth[jets[1]];
-    fIsBTagged1 = fBTagging.isBJet(fBtag1, truth < 0 ? 0 : truth_pdgid[truth],
-				   pfjet_pt[jets[1]], pfjet_eta[jets[1]]);
-    Fill("isbtag", fBtag0, fIsBTagged0 ? 1 : 0);
-    Fill("isbtag", fBtag1, fIsBTagged1 ? 1 : 0);
+    fIsBTagged = false;
+    for (int n = 0; n < fJets; n++) {
+      int jj = jets[n];
+      Int_t truth = pfjet_truth[jj];
+      bool tagged = fBTagging.isBJet(pfjet_btag[jj], 
+				     truth < 0 ? 0 : truth_pdgid[truth],
+				     pfjet_pt[jj], 
+				     pfjet_eta[jj]);
+      Fill("isbtag", pfjet_btag[jj], tagged ? 1 : 0);
+      if (tagged)
+	fIsBTagged = true;
+    }
 
     //////////////////////////////////////////////////////////////////////
     // MET cut with control regions
@@ -1366,10 +1366,7 @@ void Analysis::Loop()
     if (met_et[MET_INDEX] >= 50.) {
       // fill some histograms for inverse cut (needed for cross-checks), control region
       Fill("CR1_m_mumu", m_mumu);
-      Fill("CR1_btag0", fBtag0);
-      Fill("CR1_btag1", fBtag1);
-      Fill("CR1_btag", fBtag0, fBtag1);
-      if (fIsBTagged0 || fIsBTagged1) {
+      if (fIsBTagged) {
 	// CR2: large MET and btag enhanced control region
 	Fill("CR2_m_mumu", m_mumu);
       }
@@ -1382,7 +1379,7 @@ void Analysis::Loop()
 	Fill("CR4_m_mumu", m_mumu);
 	Fill("CR4_m_smuon", SmuonMass);
 	Fill("CR4_m_gaugino", GauginoMass);
-	if (fIsBTagged0 || fIsBTagged1) {
+	if (fIsBTagged) {
 	  // CR5: large MET, same charge and btag enhanced control region
 	  Fill("CR5_m_mumu", m_mumu);
 	  Fill("CR5_m_smuon", SmuonMass);
@@ -1436,12 +1433,9 @@ void Analysis::Loop()
     Fill("jjmm_m", SmuonMass, GauginoMass); // final binning
     Fill("muo_n", muo_n);
     Fill("m_smu_chi", SmuonMass, GauginoMass);
-    Fill("btag0", fBtag0);
-    Fill("btag1", fBtag1);
-    Fill("btag", fBtag0, fBtag1);
 
     // b-tag veto
-    if (fIsBTagged0 || fIsBTagged1) {
+    if (fIsBTagged) {
       continue;
     }
     Fill("cutflow", "btag veto");
@@ -1716,9 +1710,6 @@ void Analysis::CreateHistograms()
   CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
   CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("CR1_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR1_btag0", "CR1 jet0 btag", 120, -20, 40);
-  CreateHisto("CR1_btag1", "CR1 jet1 btag", 120, -20, 40);
-  CreateHisto("CR1_btag", "CR1 jet1 btag:CR1 jet0 btag", 30, -10, 20, 30, -10, 20);
   CreateHisto("CR2_m_mumu", "CR2 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR3_m_mumu", "CR3 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR4_m_mumu", "CR4 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
@@ -1731,9 +1722,6 @@ void Analysis::CreateHistograms()
   CreateHisto("CR6_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
   CreateHisto("CR6_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
 
-  CreateHisto("btag0", "jet0 btag", 120, -20, 40);
-  CreateHisto("btag1", "jet1 btag", 120, -20, 40);
-  CreateHisto("btag", "jet1 btag:jet0 btag", 30, -10, 20, 30, -10, 20);
   const double binsb[] = { 0, 3.3, 100 };
   CreateHisto("isbtag", "isbtag:TCHE btag", 2, binsb, 2, 0, 2);
   const double bins[] = { 0, 300, 700, 5000 };
@@ -1816,10 +1804,7 @@ void Analysis::CreateBranches()
   fOutputTree.Branch("fJetId", & fJetId, "fJetId[fJets]/I");
   fOutputTree.Branch("fJet0", & fJet0, 32000, 0);
   fOutputTree.Branch("fJet1", & fJet1, 32000, 0);
-  fOutputTree.Branch("fBtag0", & fBtag0, "fBtag0/D");
-  fOutputTree.Branch("fBtag1", & fBtag1, "fBtag1/D");
-  fOutputTree.Branch("fIsBTagged0", & fIsBTagged0, "fIsBTagged0/O");
-  fOutputTree.Branch("fIsBTagged1", & fIsBTagged1, "fIsBTagged1/O");
+  fOutputTree.Branch("fIsBTagged", & fIsBTagged, "fIsBTagged/O");
 }
 
 void Analysis::CreateHisto(const char * name, const char * title, Int_t nbinsx, Double_t xlow, Double_t xup)

@@ -111,10 +111,7 @@ protected:
   Int_t            fJetId[40]; // ID's of selected main jets
   TLorentzVector * fJet0;
   TLorentzVector * fJet1;
-  double           fBtag0;
-  double           fBtag1;
-  Bool_t           fIsBTagged0;
-  Bool_t           fIsBTagged1;
+  Bool_t           fIsBTagged;
   TLorentzVector * fSmuon;
   TLorentzVector * fGaugino;
 
