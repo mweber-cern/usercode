@@ -174,7 +174,7 @@ def setupInbox():
 def main():
     usage = """usage: %prog [options] selection [jobgroup] [pattern]
 
-Will create a and submit jobs from the given jobgroup matching the pattern to
+Will create and submit jobs from the given jobgroup matching the pattern to
 CONDOR. The job files and output will be stored in BASEDIR/selection in
 subdirectories, one for each configured period (for configuration see default
 configuration file). "jobgroup" defaults to the default job group named

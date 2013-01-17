@@ -210,7 +210,17 @@ def check_log(logfilename, errors, warnings, requirements):
     # inform user
     return True
 
+def get_maximum_jobs(njobs):
+    """Throttle the maximum number of jobs during typical office hours in order
+not to overload the network"""
+    ltime = time.localtime()
+    if ltime.tm_hour > 9 and ltime.tm_hour < 20:
+        return njobs / 4
+    else:
+        return njobs
+
 def wait_for_jobs(njobs):
+    njobs = get_maximum_jobs(njobs)
     wait = True
     while wait:
         # check how many jobs are running already
@@ -227,7 +237,8 @@ def wait_for_jobs(njobs):
         jobcount = 0
         for line in joblist.splitlines():
             if getpass.getuser() in line:
-                jobcount += 1
+                if line.split()[5] != "H":
+                    jobcount += 1
         # if the maximal job count is exceeded, sleep for a while
         if jobcount >= njobs:
             print "Reached " + str(njobs) + " jobs, sleeping for 30 s..."
