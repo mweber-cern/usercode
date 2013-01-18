@@ -1,32 +1,20 @@
 ** TODO Analyse 2012
- - lumifilter testen und aktivieren (golden JSON)
- - Bad event liste (HCAL) testen und aktivieren
-   - vorsicht negative zahlen!
 
-   - does gzip work?
-
- - 2012er object ID (bis auf Muon) in Analysis.cxx einbauen
- - MET index überprüfen für 2012
- - trigger threshold anpassen (talk Daniel)
-   - Skim options im Configfile anpassen
- - Filter liste (z.b. HBHE etc.) einbauen, testen, aktivieren
-   - alte noise cuts??
- - lumicalc2 mit golden JSON 
  - trigger matching auf 2012er Daten
  - b-tagging umstellen von TCHEM -> ????
    - Systematiken, 2012 scale factors etc. updaten
  - JER smearing update
- - Pileup reweighting fix für 2011 ausbauen -> Martin
- - Same sign charge cut -> Data driven measurement???
-
  - T/L ratio
    - Fake histogramme paralle für 2011 und 2012 einbauen
 
+ - Pileup reweighting fix für 2011 ausbauen -> Martin
  - Trigger prescale in SUSYAcSkimAnalysis einbauen -> Martin
 
- - Improve selection: 
-   - Sliding Mass window for limit
-   - Signal injection test
+ - Improvements:
+  - Same sign charge cut -> Data driven measurement???
+  - Sliding Mass window for limit
+  - Signal injection test
+
  - Limit plot
    - stau LSP Gebiet aus den Dateien von HERWIG / Lars raussuchen
    - LEP Limits herausfinden, einzeichnen
