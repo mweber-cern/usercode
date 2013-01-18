@@ -156,6 +156,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   // initialize pileup reweighting
   fPileupReweighting = fCfgFile.GetValue("PileupReweighting", true);
   INFO("fPileupReweighting = " << fPileupReweighting);
+#if VERSION == 78
   // check for samples with bad pileup description
   if (fSample == "www" || fSample == "wwz" || fSample == "wzz" || fSample == "zzz"
       || fSample == "wwdoubleparton"
@@ -168,9 +169,6 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
     }
     fPileupReweighting = false;
   }
-  else {
-  }
-#if VERSION == 78
   const char * PileupDataFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupDataFile_2011", ""));
   const char * PileupMCFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupMCFile_2011", ""));
   const char * PileupWeightFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupWeightFile_2011", ""));
@@ -758,7 +756,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // filter data on luminosity section - typically golden JSON file
-    if(!runcfg.check(global_run, lumi_section))
+    if (!runcfg.check(global_run, lumi_section))
       continue;
     Fill("cutflow", "lumifilter");
     DEBUG("cutflow " << "lumifilter");
