@@ -10,6 +10,8 @@ using namespace std;
 #include "TTree.h"
 #include "TSystem.h"
 #include "TROOT.h"
+#include "TIterator.h"
+#include "THashList.h"
 
 #include "plot.h"
 
@@ -103,7 +105,7 @@ void setopt(TCanvas * canvas)
   canvas->SetTopMargin(0.03);
   canvas->SetRightMargin(0.05);
   canvas->SetBottomMargin(0.15);
-  canvas->SetFillColor(999);
+  canvas->SetFillColor(kWhite);
   canvas->SetFillStyle(1001);
   canvas->SetBorderSize(0);
   canvas->SetBorderMode(0);
@@ -133,7 +135,7 @@ void setopt(TLegend * leg)
 {
   // set legend default option
   leg->SetBorderSize(0);
-  leg->SetFillColor(999);
+  leg->SetFillColor(kWhite);
 }
 
 void setopt(TGraph * gr)
@@ -235,6 +237,210 @@ void delete_old_config()
   DEBUG("delete_old_config() end");
 }
 
+
+// read all config files
+void read_config_files(const char * configFileName = "plot.cfg")
+{
+  INFO("Opening config file " << configFileName);
+  gConfig = new TEnv(configFileName);
+
+  THashList * gTable = (THashList *) gConfig->GetTable();
+  TIter next(gTable);
+  TEnvRec * obj = 0;
+  
+  // number of data taking periods, backgrounds, signals
+  bool signalToggle = false;
+  TString processName = "toast";
+  vector<TString> periods;
+  vector<TString> backgrounds;
+  vector<TString> signals;
+ 
+  
+
+  while ( (obj = (TEnvRec *) next()) ) {
+    TString objName = obj->GetName();
+    // skip if settings or data
+    if (objName.BeginsWith("settings") || objName.BeginsWith("data")) continue;
+
+    // count periods
+    if (objName.BeginsWith("period")) {
+      periods.push_back(objName);
+      continue;
+    }
+
+    // signal or background?
+    if (objName == "background") {
+      signalToggle = false;
+      continue;
+    }
+    else if (objName == "signal") {
+      signalToggle = true;
+      continue;
+    }
+
+    // count signals and periods
+    if (!objName.BeginsWith(processName+'.')) {
+      
+      TObjArray * objStrArr = (TObjArray *) objName.Tokenize(".");
+      TObjString * objStrEle = (TObjString *) objStrArr->At(0);
+      processName = objStrEle->GetString();
+
+      if (signalToggle) {
+	signals.push_back(processName);
+      }
+      else {
+	backgrounds.push_back(processName);
+      }
+    }
+  }
+
+  // get number of periods
+  gMaxPeriod = periods.size();
+  if (gMaxPeriod < 1) {
+    ERROR("No periods found in config file");
+    return;
+  }
+  INFO("Configuring for " << gMaxPeriod << " period(s)");
+
+  // get number of background MCs
+  Int_t N_bg = backgrounds.size();
+  if (N_bg < 0) {
+    ERROR("Number of backgrounds found in config file is < 1");
+    return;
+  }
+  INFO("Number of backgrounds: " << N_bg);
+
+  // get number of signal MCs
+  gMaxSignal = signals.size();
+  if (gMaxSignal < 1) {
+    WARNING("Number of signals found in config file is < 1");
+  }
+  else {
+    INFO("Number of signals: " << gMaxSignal);
+  }
+
+  // create and initialize period depending arrays
+  gPeriod = new char * [gMaxPeriod];
+  gCuts   = new TEnv * [gMaxPeriod];
+  gLumi   = new Double_t[gMaxPeriod];
+  for (Int_t i = 0; i < gMaxPeriod; i++) {
+    DEBUG("Period #" << i << ": " << gConfig->GetValue(Form("%s", periods.at(i).Data()), ""));
+    gPeriod[i] = strdup_new(gConfig->GetValue(Form("%s", periods.at(i).Data()), ""));
+    gCuts[i] = 0;
+    gLumi[i] = 0;
+  }
+
+  // plot all periods by default
+  gStart = 0; gEnd = gMaxPeriod-1;
+
+  // number of processes
+  gMaxProcess = N_bg + gMaxSignal + 1;
+  
+  // create and initialize arrays depending on gMaxProcess
+  for (Int_t pad = 0; pad < gMaxPad; pad++) {
+    gHisto[pad]  = new TH1D * [gMaxProcess];
+    gStack[pad]  = new TH1D * [gMaxProcess];
+    gShadow[pad] = new TH1D * [gMaxProcess];
+    gOrder[pad]  = new Int_t[gMaxProcess];
+    gHisto3[pad] = new TH3D * [gMaxProcess];
+    for (Int_t i = 0; i < gMaxProcess; i++) {
+      gHisto[pad][i]  = 0;
+      gStack[pad][i]  = 0;
+      gShadow[pad][i] = 0;
+      gOrder[pad][i] = i;
+      gHisto3[pad][i] = 0;
+    }
+  }
+  gHisto2      = new TH2D * [gMaxProcess];
+  gProcess     = new TProcess[gMaxProcess];
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    gHisto2[i] = 0;
+  }
+
+  // automatic color selection
+  // read all processes
+  // signal and background
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
+    const char * selector = 0;
+    if (i < gMaxSignal) {
+      selector = strdup_new(Form("%s", signals.at(i).Data()));
+    }
+    else {
+      selector = strdup_new(Form("%s", backgrounds.at(i-gMaxSignal).Data()));
+    }
+    gProcess[i].fname = strdup_new(selector);
+    gProcess[i].tname = strdup_new(gConfig->GetValue(Form("%s.label", selector),
+						 gProcess[i].fname));
+    gProcess[i].fcolor = gConfig->GetValue(Form("%s.fcolor", selector),  i);
+    gProcess[i].lcolor = gConfig->GetValue(Form("%s.lcolor", selector),  gProcess[i].fcolor);
+    gProcess[i].lstyle = gConfig->GetValue(Form("%s.lstyle", selector),  1);
+    gProcess[i].hcolor = gConfig->GetValue(Form("%s.hcolor", selector),  kWhite);
+    gProcess[i].hstyle = gConfig->GetValue(Form("%s.hstyle", selector),  1001);
+    gProcess[i].marker = gConfig->GetValue(Form("%s.marker", selector),  8);
+    gProcess[i].mcolor = gConfig->GetValue(Form("%s.mcolor", selector),  1);
+    gProcess[i].msize  = gConfig->GetValue(Form("%s.msize", selector),  0.7);
+    gProcess[i].join   = gConfig->GetValue(Form("%s.join", selector), kFALSE);
+    gProcess[i].stack  = gConfig->GetValue(Form("%s.stack", selector), kTRUE);
+    if (i == 0 || i == gMaxSignal) {
+      if (gProcess[i].join) {
+	ERROR("Misconfiguration for process " << selector << ":");
+	ERROR("You are not allowed to join the first signal or background histogram");
+      }
+    }
+  }
+  // data
+  gProcess[gMaxProcess-1].fname     = strdup_new("data_doublemu");
+  gProcess[gMaxProcess-1].tname     = strdup_new(gConfig->GetValue("data_doublemu.label", "Data"));
+  gProcess[gMaxProcess-1].fcolor    = kWhite;
+  gProcess[gMaxProcess-1].lcolor    = kWhite;
+  gProcess[gMaxProcess-1].hcolor    = kWhite;
+  gProcess[gMaxProcess-1].hstyle    = 1001;
+  gProcess[gMaxProcess-1].lstyle    = 1;
+  gProcess[gMaxProcess-1].marker    = 8;
+  gProcess[gMaxProcess-1].mcolor    = 1;
+  gProcess[gMaxProcess-1].msize     = .7;
+  gProcess[gMaxProcess-1].join      = kFALSE;
+  gProcess[gMaxProcess-1].stack     = kFALSE;
+
+  // misc setup
+  gBase = strdup_new(gConfig->GetValue("settings.basedir", "."));
+
+  // read xs and lumi for each process
+  gProcessInfo = new TProcessInfo * [gMaxPeriod];
+  for (Int_t period = 0; period < gMaxPeriod; period++) {
+    gProcessInfo[period] = new TProcessInfo[gMaxProcess-1];
+    for (Int_t process = 0; process < gMaxProcess-1; process++) {
+      DEBUG("Option " << Form("%s.%s.xs", gProcess[process].fname, gPeriod[period])
+	    << " has value " << gConfig->GetValue(Form("%s.%s.xs", gProcess[process].fname, gPeriod[period]), gOptDefault) );
+      gProcessInfo[period][process].xs = gConfig->GetValue(Form("%s.%s.xs", gProcess[process].fname, gPeriod[period]), gOptDefault);
+      gProcessInfo[period][process].Nev = gConfig->GetValue(Form("%s.%s.Nev", gProcess[process].fname, gPeriod[period]), -1);
+      gProcessInfo[period][process].weight = gConfig->GetValue(Form("%s.%s.weight", gProcess[process].fname, gPeriod[period]), 1.);
+      
+      DEBUG("Nev    = " << gProcessInfo[period][process].Nev);
+      DEBUG("xs     = " << gProcessInfo[period][process].xs);
+      DEBUG("weight = " << gProcessInfo[period][process].weight);
+
+      if (gProcessInfo[period][process].xs == gOptDefault) {
+	ERROR("Unreasonable or no cross-section " << gProcessInfo[period][process].xs
+	      << " for process " << gProcess[process].fname << " in file " << configFileName);
+      }
+      if (gProcessInfo[period][process].Nev < 0) {
+	ERROR("Unreasonable event number " << gProcessInfo[period][process].Nev
+	      << " for process " << gProcess[process].fname << " in file " << configFileName);
+      }
+      if (gProcessInfo[period][process].weight < 0) {
+	ERROR("Unreasonable weight " << gProcessInfo[period][process].weight
+	      << " for process " << gProcess[process].fname << " in file " << configFileName);
+      }
+    }
+    gLumi[period] = gConfig->GetValue(Form("data_doublemu.%s.lumi", gPeriod[period]), gOptDefault);
+    if (gLumi[period] == gOptDefault || gLumi[period] < 0) {
+      ERROR("Bad lumi " << gLumi[period] << " from file " << configFileName);
+    }
+  }
+}
+
+
 // read configuration from file
 void read_config_file(const char * configFileName = "Overview.cfg")
 {
@@ -321,7 +527,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
     gProcess[i].fcolor = gConfig->GetValue(Form("%s.fcolor", selector),  i);
     gProcess[i].lcolor = gConfig->GetValue(Form("%s.lcolor", selector),  gProcess[i].fcolor);
     gProcess[i].lstyle = gConfig->GetValue(Form("%s.lstyle", selector),  1);
-    gProcess[i].hcolor = gConfig->GetValue(Form("%s.hcolor", selector),  999);
+    gProcess[i].hcolor = gConfig->GetValue(Form("%s.hcolor", selector),  kWhite);
     gProcess[i].hstyle = gConfig->GetValue(Form("%s.hstyle", selector),  1001);
     gProcess[i].marker = gConfig->GetValue(Form("%s.marker", selector),  8);
     gProcess[i].mcolor = gConfig->GetValue(Form("%s.mcolor", selector),  1);
@@ -338,9 +544,9 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   // data
   gProcess[gMaxProcess-1].fname = strdup_new(gConfig->GetValue("file", "data"));
   gProcess[gMaxProcess-1].tname = strdup_new(gConfig->GetValue("label", "Data"));
-  gProcess[gMaxProcess-1].fcolor    = 999;
-  gProcess[gMaxProcess-1].lcolor    = 999;
-  gProcess[gMaxProcess-1].hcolor    = 999;
+  gProcess[gMaxProcess-1].fcolor    = kWhite;
+  gProcess[gMaxProcess-1].lcolor    = kWhite;
+  gProcess[gMaxProcess-1].hcolor    = kWhite;
   gProcess[gMaxProcess-1].hstyle    = 1001;
   gProcess[gMaxProcess-1].lstyle    = 1;
   gProcess[gMaxProcess-1].marker    = 8;
@@ -424,13 +630,30 @@ void version(Int_t version)
 // plot.C code are called.
 void setup(const char * configFileName)
 {
-  INFO("Setting up plot macro");
+  INFO("Setting up plot macro from config directory");
 
   // set plot style
   setopt(gStyle);
 
-  // define a real white color
-  TColor mWhite(999, 1., 1., 1., "mWhite");
+  // use weighted histograms
+  TH1::SetDefaultSumw2();
+  TH2::SetDefaultSumw2();
+  TH3::SetDefaultSumw2();
+
+  // read configuration file
+  const char * expConfigFilePath = gSystem->ExpandPathName(Form("../config/%s", configFileName));
+  read_config_files(expConfigFilePath);
+  delete expConfigFilePath;
+}
+
+// this function should be called e.g. by your rootlogon.C, before any functions of the
+// plot.C code are called.
+void setup_dumpallplots(const char * configFileName)
+{
+  INFO("Setting up plot macro");
+
+  // set plot style
+  setopt(gStyle);
 
   // use weighted histograms
   TH1::SetDefaultSumw2();
@@ -526,11 +749,11 @@ void MakeCanvas2(Int_t dy, Double_t percent = 0.8)
   for (Int_t i = 0; i < dy; i++) {
     snprintf(name, 20, "gCanvas_%d", i+1);
     TPad * pad = new TPad(name, name, 0.001, 1-(i+1)*ysize, percent-0.01, 1-i*ysize,
-			  999);
+			  kWhite);
     pad->SetNumber(i+1);
     pad->Draw();
     snprintf(name, 20, "gCanvas_%d", 10*(i+1));
-    pad = new TPad(name, name, percent, 1-(i+1)*ysize, 0.99, 1-i*ysize, 999);
+    pad = new TPad(name, name, percent, 1-(i+1)*ysize, 0.99, 1-i*ysize, kWhite);
     pad->SetNumber(10*(i+1));
     pad->Draw();
   }
@@ -966,7 +1189,7 @@ void draw(Bool_t autotitle = kTRUE)
       }
       shadow = new TH1D(*histo);
       shadow->SetFillStyle(1001);
-      shadow->SetFillColor(999);
+      shadow->SetFillColor(kWhite);
       shadow->Draw("same");
       histo->SetFillStyle(gProcess[process].hstyle);
       histo->SetFillColor(gProcess[process].hcolor);
@@ -1711,7 +1934,7 @@ TH1D * addperiod(Int_t process, const char * hname,
       // create specified histogram
       TH1D * hmine = new TH1D("hmine", hname, nbins, min, max);
       // get tree from current file
-      const char * treename = gConfig->GetValue("treename", "t");
+      const char * treename = gConfig->GetValue("settings.treename", "t");
       TTree * dtree = (TTree *) f->Get(treename);
       if (dtree == 0) {
 	// no tree found, try next period
@@ -2086,7 +2309,7 @@ TH3D * addperiod3(Int_t process, const char * hname,
       // key has not been found, generate histogram from tree
       // create specified histogram
       // get tree from current file
-      const char * treename = gConfig->GetValue("treename", "t");
+      const char * treename = gConfig->GetValue("settings.treename", "t");
       TTree * dtree = (TTree *) f->Get(treename);
       if (dtree == 0) {
 	// no tree found, try next period
