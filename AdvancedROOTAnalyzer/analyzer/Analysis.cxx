@@ -1039,7 +1039,7 @@ void Analysis::Loop()
 	loose_muons.push_back(muons[i]);
 	loose_dR.push_back(Rmin);
       }
-      if (relIso < 0.15 && fabs(muo_d0Tk[m]) < 0.02)
+      if (relIso < 0.15 && fabs(muo_d0Tk[m]) < 0.02) {
 	tight_muons.push_back(muons[i]);
 	tight_dR.push_back(Rmin);
       }
