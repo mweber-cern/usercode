@@ -888,7 +888,7 @@ void Analysis::Loop()
       MuonCuts.Set("nMuon_pt", muo_pt[i] > 7., muo_pt[i]);
       MuonCuts.Set("nMuon_eta", fabs(muo_eta[i]) <= 2.1, fabs(muo_eta[i]));
       MuonCuts.Set("nMuon_id", muo_ID[i][1] == 1, muo_ID[i][1]);
-      MuonCuts.Set("nMuon_d0Tk", fabs(muo_d0Tk[i]) < 0.02, fabs(muo_d0Tk[i]));
+      MuonCuts.Set("nMuon_d0Tk", fabs(muo_d0Tk[i]) < 0.2, fabs(muo_d0Tk[i]));
       MuonCuts.Set("nMuon_ValidPixelHitsCm", muo_ValidPixelHitsCm[i] > 0,
 		   muo_ValidPixelHitsCm[i]);
       MuonCuts.Set("nMuon_TrkChiNormCm", muo_TrkChiNormCm[i] < 10., muo_TrkChiNormCm[i]);
@@ -946,6 +946,8 @@ void Analysis::Loop()
       double Rmin = 1000;
       for (int mu = 0; mu < nMuon; mu++) {
 	int m = muons[mu];
+	if (fabs(muo_d0Tk[m]) > 0.02)
+	  continue;
 	TLorentzVector mu(muo_px[m], muo_py[m], muo_pz[m], muo_E[m]);
 	Rmin = TMath::Min(Rmin, jet.DeltaR(mu));
       }
@@ -993,8 +995,8 @@ void Analysis::Loop()
       double relIso = 1000.;
       int m = muons[i];
       double E = muo_TrkIso[m] + muo_ECalIso[m] + muo_HCalIso[m];
-      if (muo_pt[m] < 20.) {
-	relIso = E / 20.;
+      if (muo_pt[m] < 15.) {
+	relIso = E / 15.;
       }
       else {
 	relIso = E / muo_pt[m];
@@ -1037,7 +1039,7 @@ void Analysis::Loop()
 	loose_muons.push_back(muons[i]);
 	loose_dR.push_back(Rmin);
       }
-      if (relIso < 0.15) {
+      if (relIso < 0.15 && fabs(muo_d0Tk[m]) < 0.02)
 	tight_muons.push_back(muons[i]);
 	tight_dR.push_back(Rmin);
       }
