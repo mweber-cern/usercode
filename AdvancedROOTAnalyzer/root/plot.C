@@ -237,7 +237,6 @@ void delete_old_config()
   DEBUG("delete_old_config() end");
 }
 
-
 // read all config files
 void read_config_files(const char * configFileName = "plot.cfg")
 {
@@ -305,19 +304,18 @@ void read_config_files(const char * configFileName = "plot.cfg")
   // get number of background MCs
   Int_t N_bg = backgrounds.size();
   if (N_bg < 0) {
-    ERROR("Number of backgrounds found in config file is < 1");
+    ERROR("Number of backgrounds found in config file is < 0");
     return;
   }
   INFO("Number of backgrounds: " << N_bg);
 
   // get number of signal MCs
   gMaxSignal = signals.size();
-  if (gMaxSignal < 1) {
-    WARNING("Number of signals found in config file is < 1");
+  if (gMaxSignal < 0) {
+    ERROR("Number of signals N_sg found in config file < 0");
+    return;
   }
-  else {
-    INFO("Number of signals: " << gMaxSignal);
-  }
+  INFO("Number of signals: " << gMaxSignal);
 
   // create and initialize period depending arrays
   gPeriod = new char * [gMaxPeriod];
@@ -389,8 +387,8 @@ void read_config_files(const char * configFileName = "plot.cfg")
     }
   }
   // data
-  gProcess[gMaxProcess-1].fname     = strdup_new("data_doublemu");
-  gProcess[gMaxProcess-1].tname     = strdup_new(gConfig->GetValue("data_doublemu.label", "Data"));
+  gProcess[gMaxProcess-1].fname     = strdup_new("data");
+  gProcess[gMaxProcess-1].tname     = strdup_new(gConfig->GetValue("data.label", "Data"));
   gProcess[gMaxProcess-1].fcolor    = kWhite;
   gProcess[gMaxProcess-1].lcolor    = kWhite;
   gProcess[gMaxProcess-1].hcolor    = kWhite;
@@ -433,13 +431,12 @@ void read_config_files(const char * configFileName = "plot.cfg")
 	      << " for process " << gProcess[process].fname << " in file " << configFileName);
       }
     }
-    gLumi[period] = gConfig->GetValue(Form("data_doublemu.%s.lumi", gPeriod[period]), gOptDefault);
+    gLumi[period] = gConfig->GetValue(Form("data.%s.lumi", gPeriod[period]), gOptDefault);
     if (gLumi[period] == gOptDefault || gLumi[period] < 0) {
       ERROR("Bad lumi " << gLumi[period] << " from file " << configFileName);
     }
   }
 }
-
 
 // read configuration from file
 void read_config_file(const char * configFileName = "Overview.cfg")
@@ -472,7 +469,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   // get number of background MCs
   Int_t N_bg = gConfig->GetValue("N_bg", -1);
   if (N_bg < 0) {
-    ERROR("Number of backgrounds N_bg not found in config file or N_bg < 1");
+    ERROR("Number of backgrounds N_bg not found in config file or N_bg < 0");
     return;
   }
   INFO("Number of backgrounds: " << N_bg);
@@ -480,7 +477,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   // get number of signal MCs
   gMaxSignal = gConfig->GetValue("N_sg", -1);
   if (gMaxSignal < 0) {
-    ERROR("Number of signals N_sg not found in config file or N_sg < 1");
+    ERROR("Number of signals N_sg not found in config file or N_sg < 0");
     return;
   }
   INFO("Number of signals: " << gMaxSignal);
