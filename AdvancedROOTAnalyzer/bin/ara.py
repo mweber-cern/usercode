@@ -213,11 +213,11 @@ def check_log(logfilename, errors, warnings, requirements):
 def get_maximum_jobs(njobs):
     """Throttle the maximum number of jobs during typical office hours in order
 not to overload the network"""
-    ltime = time.localtime()
-    if ltime.tm_hour > 9 and ltime.tm_hour < 20:
-        return njobs / 4
-    else:
-        return njobs
+    #ltime = time.localtime()
+    #if ltime.tm_hour > 9 and ltime.tm_hour < 20:
+    #    return njobs / 4
+    #else:
+    return njobs
 
 def wait_for_jobs(njobs):
     njobs = get_maximum_jobs(njobs)

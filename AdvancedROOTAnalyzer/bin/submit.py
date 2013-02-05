@@ -182,7 +182,7 @@ configuration file). "jobgroup" defaults to the default job group named
 will be submitted."""
     optParser = optparse.OptionParser(usage)
     defaulttemplate="condor_template.cfg"
-    defaultnjobs=20
+    defaultnjobs=25
     defaultsplit=1000
     defaultanalysiscfg='default'
     optParser.add_option("-c", "--config", dest="cfgfile",
