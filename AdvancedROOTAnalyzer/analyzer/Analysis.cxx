@@ -28,11 +28,7 @@ using namespace std;
 // constants
 
 // use type 1 corrected PFMET
-#if VERSION == 78 || VERSION == 88
-const int MET_INDEX = 7;
-#else
 const int MET_INDEX = 1;
-#endif
 
 // externally generated with ../bin/gencutflow.py
 extern TH1D * get_cutflow_histogram();
@@ -121,6 +117,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fTL_zmass_max = fCfgFile.GetValue("TL_zmass_max",  111.);
   fTL_mupt_min = fCfgFile.GetValue("TL_mupt_min",  15.);
   fTL_jetdphi_min = fCfgFile.GetValue("TL_jetdphi_min",  1.0);
+  fTL_mumudphi_max = fCfgFile.GetValue("TL_mumudphi_max",  1.0);
   fTL_mt_max = fCfgFile.GetValue("TL_mt_max",  40.);
   fTL_njets_min = fCfgFile.GetValue("TL_njets_min", 1.);
 
@@ -133,18 +130,17 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   INFO("fTL_zmass_max: " << fTL_zmass_max);
   INFO("fTL_mupt_min: " << fTL_mupt_min);
   INFO("fTL_jetdphi_min: " << fTL_jetdphi_min);
+  INFO("fTL_mumudphi_max: " << fTL_mumudphi_max);
   INFO("fTL_mt_max: " << fTL_mt_max);
   INFO("fTL_nJets: " << fTL_njets_min);
 
   // values for smearing jet energies to obtain correct jet energy resolution
   // (JER)
-  fJER_official = fCfgFile.GetValue("JER_official", true);
-  fJER_scale = fCfgFile.GetValue("JER_scale", 0.05);
+  fJER_calculation = fCfgFile.GetValue("JER_calculation", false);
   fJER_center = fCfgFile.GetValue("JER_center", 0.);
   fJER_smear = fCfgFile.GetValue("JER_smear", 20.);
 
-  INFO("fJER_official = " << fJER_official);
-  INFO("fJER_scale = " << fJER_scale);
+  INFO("fJER_calculation = " << fJER_calculation);
   INFO("fJER_center = " << fJER_center);
   INFO("fJER_smear = " << fJER_smear);
 
@@ -156,42 +152,6 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   // initialize pileup reweighting
   fPileupReweighting = fCfgFile.GetValue("PileupReweighting", true);
   INFO("fPileupReweighting = " << fPileupReweighting);
-#if VERSION == 78
-  // check for samples with bad pileup description
-  if (fSample == "www" || fSample == "wwz" || fSample == "wzz" || fSample == "zzz"
-      || fSample == "wwdoubleparton"
-      || fSample == "wminuswminus" || fSample == "wpluswplus") {
-    // these events are from an older production than Fall11. Do not
-    // reweight, since the pileup description is wrong
-    INFO("Processing sample with bad pu_num_int[], not reweighting");
-    if (fPileupReweighting) {
-      INFO("Overriding configuration option \"PileupReweighting\"");
-    }
-    fPileupReweighting = false;
-  }
-  const char * PileupDataFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupDataFile_2011", ""));
-  const char * PileupMCFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupMCFile_2011", ""));
-  const char * PileupWeightFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupWeightFile_2011", ""));
-  // see if weight file exits
-  if (!check_root_file(PileupWeightFile)) {
-    INFO("Could not open pileup reweighting file " << PileupWeightFile);
-    if (!check_root_file(PileupMCFile)) {
-      ERROR("Could not find reweighting file " << PileupMCFile);
-      THROW("Missing required file: " + string(PileupMCFile));
-    }
-    if (!check_root_file(PileupDataFile)) {
-      ERROR("Could not find reweighting file " << PileupDataFile);
-      THROW("Missing required file: " + string(PileupDataFile));
-    }
-    LumiWeights_ = reweight::LumiReWeighting(PileupMCFile, PileupDataFile, "pileup","pileup");
-    LumiWeights_.weight3D_init();
-  }
-  else {
-    LumiWeights_ = reweight::LumiReWeighting();
-    LumiWeights_.weight3D_init(PileupWeightFile);
-  }
-  delete PileupWeightFile;
-#elif VERSION == 88 || VERSION == 92 || VERSION == 96
   const char * PileupDataFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupDataFile_2012", ""));
   const char * PileupMCFile = gSystem->ExpandPathName(fCfgFile.GetValue("PileupMCFile_2012", ""));
   if (!check_root_file(PileupMCFile)) {
@@ -203,7 +163,6 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
     THROW("Missing required file: " + string(PileupDataFile));
   }
   LumiWeights_ = reweight::LumiReWeighting(PileupMCFile, PileupDataFile, "pileup","pileup");
-#endif
 
   delete PileupDataFile;
   delete PileupMCFile;
@@ -237,12 +196,27 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   INFO("Initialized fake rate by reading histograms from file");
 
   // Lumi ranges. Default: empty string, i.e. do not filter
-//   if (fInputType == "data")) {
-//     fLumiRanges = fCfgFile.GetValue("LumiRanges", "");
-//   }
-//   else {
-  fLumiRanges = "";
-//   }
+  if (fInputType == "data") {
+    fLumiRanges = fCfgFile.GetValue("LumiRanges", "");
+    if (fLumiRanges != "") {
+      INFO("Loaded golden luminosity ranges from file " << fLumiRanges);
+    }
+  }
+  else {
+    fLumiRanges = "";
+  }
+  
+  // Event filter. Default: empty string,i.e. do not filter
+  if (fInputType == "data") {
+    fEventFilter = fCfgFile.GetValue("EventFilter", "");
+    if (fEventFilter != "") {
+      INFO("Loaded HCAL laser filter information from file " << fEventFilter);
+    }
+  }
+  else {
+    fEventFilter = "";
+  }
+
   fDeltaPhiMin = fCfgFile.GetValue("DeltaPhiMin", 2.0);
   INFO("DeltaPhiMin = " << fDeltaPhiMin);
 }
@@ -314,6 +288,281 @@ void Analysis::ReconstructFinalState(map<char, vector<int> > & particles, int ve
   }
 }
 
+void Analysis::GetSimplifiedModelParticles(map<string, vector<int> > & particles, int vertex)
+{
+  //DEBUG("Analysis::CheckForSimplifiedModel(" << vertex << ")");
+  //loop over all particles
+  for (int i = 0; i < truth_n; i++) {
+    // only take particles from this vertex
+    if (truth_bvtxid[i] != vertex)
+      continue;
+    
+    int pdgid = abs(truth_pdgid[i]);
+    
+    if (pdgid == 13) {
+      particles["mu"].push_back(i);
+    }
+    else if (pdgid == 1000024) {
+      particles["x+-1"].push_back(i);
+      GetSimplifiedModelParticles(particles, truth_evtxid[i]);      
+    }
+    else if (pdgid == 1000037) {
+      particles["x+-2"].push_back(i);
+      GetSimplifiedModelParticles(particles, truth_evtxid[i]);      
+    }
+    else if (pdgid == 1000022) {
+      particles["x01"].push_back(i);
+      GetSimplifiedModelParticles(particles, truth_evtxid[i]);
+    }
+    else if (pdgid == 1000023) {
+      particles["x02"].push_back(i);
+      GetSimplifiedModelParticles(particles, truth_evtxid[i]);
+    }
+    else if (pdgid == 1000025) {
+      particles["x03"].push_back(i);
+      GetSimplifiedModelParticles(particles, truth_evtxid[i]);
+    }
+    else if (pdgid == 1000035) {
+      particles["x04"].push_back(i);
+      GetSimplifiedModelParticles(particles, truth_evtxid[i]);
+    }
+    else if (pdgid == 1) {
+      if (vertex > 1) {
+	particles["q"].push_back(i);
+      }
+    }
+    else if (pdgid == 2) {
+      if (vertex > 1) {
+	particles["q"].push_back(i);
+      }
+    }
+    else if (pdgid == 24) {
+	particles["W"].push_back(i);
+	GetSimplifiedModelParticles(particles, truth_evtxid[i]);
+    }
+    else if (pdgid == 23 || pdgid == 25) {
+	particles["ZH"].push_back(i);
+	GetSimplifiedModelParticles(particles, truth_evtxid[i]);      
+    }
+    else if (pdgid == 0) {
+      // ignore
+    }
+    else { //other particle found -- ignore
+    }
+  }
+}
+
+int Analysis::IsSimplifiedModel(map<string, vector<int> > & particles)
+{
+  GetSimplifiedModelParticles(particles, 1);
+  
+  if (particles["mu"].size() >= 2 &&
+      particles["q"].size() >= 2) {
+    
+    if (particles["x+-2"].size() > 0) { // Chargino 2
+      return 7;
+    }
+
+    else if (particles["x+-1"].size() > 0) { // Chargino 1
+      return 6;
+    }
+
+    else if (particles["x04"].size() > 0) { // Neutralino 4 decay 
+      return 5;
+    }
+
+    else if (particles["x03"].size() > 0) { // Neutralino 3 decay
+      return 4;
+    }
+
+    else if (particles["x02"].size() > 0) { // Neutralino 2 decay
+      return 3;
+    }
+    else if (particles["x01"].size() > 0 &&
+	     (particles["ZH"].size() > 0 || particles["W"].size() > 0)) { // Neutralino 1 decay
+      return 2;
+    }
+    else if (particles["mu"].size() == 2 &&
+	     //truth_pdgid[particles['m'][0]] == truth_pdgid[particles['m'][1]] &&
+	     particles["x01"].size() >= 1 &&
+	     particles["q"].size() == 2 && 
+	     particles["ZH"].size() == 0 &&
+	     particles["W"].size() == 0) { // SMS
+      return 1;
+    }
+    else {
+      // other case, ignore for now
+    }
+
+  }
+  return -1;
+}
+
+Bool_t Analysis::TriggerMatched(Int_t muonIterator, vector <TString> triggerFilters) {
+  // muon trigger matching
+  for (unsigned int k = 0; k < (*trig_filter).size(); k++) {
+    TString name = (TString) (*trig_filter).at(k);
+    for (unsigned int l = 0; l < triggerFilters.size(); l++) {
+      // check for matching triggerfilter names and check dR
+      if ( name.EqualTo(triggerFilters.at(l)) )
+	if ( dRMatched(muonIterator, k) )
+	  return true;
+    }
+  }
+  
+  return false;  
+}
+
+Bool_t Analysis::dRMatched(Int_t muonIterator, Int_t triggerID) {
+  // helper method for muon trigger matching
+  for(int k = 0; k < trigFilter_n; k++) {
+    Double_t mindeltaR = 0.5;
+    if( trig_filterid[k] == triggerID ) {
+      Double_t dEta = fabs( muo_eta[muonIterator] - trig_eta[k] );
+      Double_t dPhi = fabs( DeltaPhi(muo_phi[muonIterator], trig_phi[k]) );
+      Double_t dR   = sqrt( pow(dEta, 2) + pow(dPhi, 2) );
+         if( dR <= mindeltaR ) {
+	   return true;
+	 }
+    }
+  }
+  return false;
+}
+
+Bool_t Analysis::MuonCuts (Int_t i) {
+  // see https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideMuonId, tight muon selection
+  TCutList MuonCuts(histo, global_weight);
+
+  // set cuts
+  MuonCuts.Set("nMuon_pt", muo_pt[i] > 7., muo_pt[i]);
+  MuonCuts.Set("nMuon_eta", fabs(muo_eta[i]) <= 2.1, fabs(muo_eta[i]));
+
+  MuonCuts.Set("nMuon_id", muo_ID[i][1] == 1, muo_ID[i][1]); // Global Muon
+  MuonCuts.Set("nMuon_ispf", muo_isPFMuon[i] == 1, muo_isPFMuon[i]);
+  MuonCuts.Set("nMuon_d0Tk", fabs(muo_d0Tk[i]) < 0.2, fabs(muo_d0Tk[i])); //dxy
+  MuonCuts.Set("nMuon_ValidPixelHitsCm", muo_ValidPixelHitsCm[i] > 0,
+	       muo_ValidPixelHitsCm[i]);
+  MuonCuts.Set("nMuon_TrkChiNormCm", muo_TrkChiNormCm[i] < 10., muo_TrkChiNormCm[i]);
+  MuonCuts.Set("nMuon_hitsCm", muo_ValidMuonHitsCm[i] > 0, muo_ValidMuonHitsCm[i]);
+
+  MuonCuts.Set("nMuon_StationsMatched", muo_StationsMatched[i] > 1, muo_StationsMatched[i]);
+  MuonCuts.Set("nMuon_dzTk", fabs(muo_dzTk[i]) < 0.5, fabs(muo_dzTk[i]));
+  MuonCuts.Set("nMuon_TrackerLayersMeasCm", muo_TrackerLayersMeasCm[i] > 5,
+	       muo_TrackerLayersMeasCm[i]);
+
+
+  MuonCuts.FillHistograms();
+  return MuonCuts.PassesAll();
+}
+
+
+Bool_t Analysis::JetCuts (Int_t i, vector <int> muons) {
+  // https://twiki.cern.ch/twiki/bin/view/CMS/JetID
+  TCutList JetCuts(histo, global_weight);
+
+  TLorentzVector jet(pfjet_px[i], pfjet_py[i], pfjet_pz[i], pfjet_E[i]);
+    
+  // set cuts
+  JetCuts.Set("nPfJet_pt", pfjet_pt[i] > 15., pfjet_pt[i]);
+  JetCuts.Set("nPfJet_eta", fabs(pfjet_eta[i]) < 2.4, fabs(pfjet_eta[i]));
+  JetCuts.Set("nPfJet_const", pfjet_const[i] > 1, pfjet_const[i]);
+  JetCuts.Set("nPfJet_pff_0", pfjet_PFF[i][0] > 0., pfjet_PFF[i][0]); // Charged Hadron Energy Fraction
+  JetCuts.Set("nPfJet_pff_1", pfjet_PFF[i][1] < 0.99, pfjet_PFF[i][1]); // Neutral Hadron Energy Fraction
+  JetCuts.Set("nPfJet_pff_2", pfjet_PFF[i][2] < 0.99, pfjet_PFF[i][2]); // Neutral Em Energy Fraction
+  JetCuts.Set("nPfJet_pff_3", pfjet_PFF[i][3] < 0.99, pfjet_PFF[i][3]); // Charged Em Energy Fraction
+  JetCuts.Set("nPfJet_pfn_0", pfjet_PFN[i][0] > 0, pfjet_PFN[i][0]); // Charged Hadron Multiplicity
+
+  // A muon might be reconstructed as a PF jet. Therefore take
+  // only those PF jets that do not "coincide" with a tight muon
+  double Rmin = 1000;
+  for (unsigned int mu = 0; mu < muons.size(); mu++) {
+    int m = muons[mu];
+    TLorentzVector mu(muo_px[m], muo_py[m], muo_pz[m], muo_E[m]);
+    Rmin = TMath::Min(Rmin, jet.DeltaR(mu));
+  }
+  JetCuts.Set("nPfJet_rmin", Rmin > 0.05, Rmin);
+  JetCuts.FillHistograms();
+
+  Fill("PfJet_m", jet.M());
+  // return true if jet passes all cuts
+  return JetCuts.PassesAll();
+}
+
+
+Bool_t Analysis::ElectronCuts (Int_t i) {
+  // https://twiki.cern.ch/twiki/bin/view/CMS/EgammaCutBasedIdentification    
+  TCutList ElectronCuts(histo, global_weight);
+  // cut values for WP80 / medium
+  const Double_t cutdEtaSCTrackAtVtxB = 0.004;
+  const Double_t cutdEtaSCTrackAtVtxE = 0.007; 
+  const Double_t cutdPhiSCTrackAtVtxB = 0.06;
+  const Double_t cutdPhiSCTrackAtVtxE = 0.03;
+  const Double_t cutSigmaIetaIetaB = 0.01;
+  const Double_t cutSigmaIetaIetaE = 0.03;
+  const Double_t cutHCalOverEmB = 0.12;
+  const Double_t cutHCalOverEmE = 0.10;
+  const Double_t cutd0vtx = 0.02;
+  const Double_t cutdZvtx = 0.1;
+  const Double_t cut1OverEminus1OverP = 0.05;
+  const Double_t cutPFisoOverPt = 0.15;
+  const Double_t cutMissingHits = 1.; //  
+      
+  // pfiso
+  Double_t rhoPrime = max(global_rho, 0.0);
+  Double_t iso_n = 0, AEff = 0;
+  if (fabs(ele_SCeta[i]) >= 0.0 && fabs(ele_SCeta[i]) < 1.0 ) AEff = 0.210;
+  if (fabs(ele_SCeta[i]) >= 1.0 && fabs(ele_SCeta[i]) < 1.479 ) AEff = 0.210;
+  if (fabs(ele_SCeta[i]) >= 1.479 && fabs(ele_SCeta[i]) < 2.0 ) AEff = 0.110;
+  if (fabs(ele_SCeta[i]) >= 2.0 && fabs(ele_SCeta[i]) < 2.2 ) AEff = 0.140;
+  if (fabs(ele_SCeta[i]) >= 2.2 && fabs(ele_SCeta[i]) < 2.3 ) AEff = 0.180;
+  if (fabs(ele_SCeta[i]) >= 2.3 && fabs(ele_SCeta[i]) < 2.4 ) AEff = 0.190;
+  if (fabs(ele_SCeta[i]) >= 2.4) AEff = 0.260;
+  iso_n = ele_PFiso[i][0] + max( ele_PFiso[i][1] + ele_PFiso[i][2] - rhoPrime*AEff, 0.0 ); 
+
+  const Double_t cutHCalIsoOpt =  0.2;
+  const Double_t cutECalIsoOpt =  0.2;
+  const Double_t cutTkIsoOpt =  0.2;
+
+  // own cuts
+  ElectronCuts.Set("nElectron_pt", ele_pt[i] > 15.0, ele_pt[i]);
+      
+  // section specific cuts
+  if (fabs(ele_SCeta[i])<1.4442) {
+    // Barrel
+    ElectronCuts.Set("nElectron_DEta", fabs(ele_dEtaSCTrackAtVtx[i]) < cutdEtaSCTrackAtVtxB, fabs(ele_dEtaSCTrackAtVtx[i]));
+    ElectronCuts.Set("nElectron_DPhi", fabs(ele_dPhiSCTrackAtVtx[i]) < cutdPhiSCTrackAtVtxB, fabs(ele_dPhiSCTrackAtVtx[i]));
+    ElectronCuts.Set("nElectron_SigmaIEtaIEta", ele_SigmaIetaIeta[i] < cutSigmaIetaIetaB, ele_SigmaIetaIeta[i]);
+    ElectronCuts.Set("nElectron_HoE", ele_HCalOverEm[i] < cutHCalOverEmB, ele_HCalOverEm[i]);
+  }
+  else if (1.566 < fabs(ele_SCeta[i]) && fabs(ele_SCeta[i]) < 2.5) {
+    // Endcap
+    ElectronCuts.Set("nElectron_DEta", fabs(ele_dEtaSCTrackAtVtx[i]) < cutdEtaSCTrackAtVtxE, fabs(ele_dEtaSCTrackAtVtx[i]));
+    ElectronCuts.Set("nElectron_DPhi", fabs(ele_dPhiSCTrackAtVtx[i]) < cutdPhiSCTrackAtVtxE, fabs(ele_dPhiSCTrackAtVtx[i]));
+    ElectronCuts.Set("nElectron_SigmaIEtaIEta", ele_SigmaIetaIeta[i] < cutSigmaIetaIetaE, ele_SigmaIetaIeta[i]);
+    ElectronCuts.Set("nElectron_HoE", ele_HCalOverEm[i] < cutHCalOverEmE, ele_HCalOverEm[i]);
+  }
+  else {
+    // ignore electrons in gap between barrel and endcap
+  }
+  // common cuts
+  ElectronCuts.Set("nElectron_d0vtx", ele_d0vtx[i] <= cutd0vtx, ele_d0vtx[i]);
+  ElectronCuts.Set("nElectron_1oE-1oP", fabs(1/ele_E[i] -  ele_EoverP[i]/ele_E[i]) < cut1OverEminus1OverP,
+		   fabs(1/ele_E[i] -  ele_EoverP[i]/ele_E[i]));
+  ElectronCuts.Set("nElectron_pfIsoOpt", iso_n/ele_Et[i] < cutPFisoOverPt, iso_n/ele_Et[i]);
+  ElectronCuts.Set("nElectron_MissingHits", ele_TrkExpHitsInner[i] <= cutMissingHits, ele_TrkExpHitsInner[i]);
+
+  ElectronCuts.Set("nElectron_dZvtx", ele_dzvtx[i] <= cutdZvtx, ele_dzvtx[i]);
+  ElectronCuts.Set("nElectron_HasMatchedConversions", ele_HasMatchedConversions[i] == true, ele_HasMatchedConversions[i]);
+
+  // isolation
+  ElectronCuts.Set("nElectron_HCalIsoOpt", ele_Dr03HCalSumEt[i]/ele_pt[i] < cutHCalIsoOpt, ele_Dr03HCalSumEt[i]/ele_pt[i]);
+  ElectronCuts.Set("nElectron_ECalIsoOpt", ele_Dr03ECalSumEt[i]/ele_pt[i] < cutECalIsoOpt, ele_Dr03ECalSumEt[i]/ele_pt[i]);
+  ElectronCuts.Set("nElectron_TkIsoOpt" ,    ele_Dr03TkSumPt[i]/ele_pt[i] < cutTkIsoOpt, ele_Dr03TkSumPt[i]/ele_pt[i]);
+      
+  ElectronCuts.FillHistograms();
+  return ElectronCuts.PassesAll();
+}
+
 truth_pt_comparator::truth_pt_comparator(const Analysis & analysis)
   : fAnalysis(analysis)
 {
@@ -325,7 +574,7 @@ bool truth_pt_comparator::operator()(int i, int j)
   return fAnalysis.truth_pt[i] > fAnalysis.truth_pt[j];
 }
 
-void Analysis::SignalStudy()
+void Analysis::SignalStudy(int & charge)
 {
   // muons, neutrinos and quarks in final state
   int nLeptons  = 0;
@@ -334,12 +583,10 @@ void Analysis::SignalStudy()
   int nBosons   = 0;
   int nHiggs    = 0;
 
-  // slepton charge
-  int charge = 0;
   // slepton four-momentum
   TLorentzVector slepton;
   TLorentzVector resonance;
-
+  
   for (int i = 0; i < truth_n; i++) {
     // sum up four-momenta of final state particles
     if (truth_evtxid[i] == -1 && truth_pdgid[i] != 0 &&
@@ -423,6 +670,8 @@ void Analysis::SignalStudy()
     }
   }
 
+  
+
   // do some cross-checks
   if ((nLeptons != 1 || nGauginos != 1) && (nSleptons != 1 || nBosons != 1)) {
     TruthDump();
@@ -482,6 +731,26 @@ void Analysis::SignalStudy()
   // everything below this line for signal MC only...
   if (!fIsSignal)
     return;
+  
+  Fill("Sig_signal_counter", 0.);
+  map<string, vector<int> > simpleParticles;
+  int modelid = IsSimplifiedModel(simpleParticles);
+  for (int i = 1; i<=7; i++) {
+    if (modelid == i) {
+      if (modelid == 6 && fabs(charge) == 0) {
+	Fill("Sig_signal_counter", 8);
+	continue;
+      }
+      if (modelid == 7 && fabs(charge) == 0) {
+	Fill("Sig_signal_counter", 9);
+	continue;
+      }
+      Fill("Sig_signal_counter",i);
+    } 
+    else if (modelid == -1) {
+      //TruthDump();
+    }
+  }
 
   // compute lepton kinematics
   truth_pt_comparator comp(*this);
@@ -543,12 +812,14 @@ void Analysis::SignalStudy()
 
 void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
 					  const vector<int> & tight_muons,
+					  const vector<int> & muons,
 					  const vector<int> & jets,
 					  const double HT)
 {
   // compute variables
   int nMuonsLoose = loose_muons.size();
   int nMuonsTight = tight_muons.size();
+
   // fill histograms before cuts
   Fill("TL_met", met_et[MET_INDEX]);
   Fill("TL_metsig", met_etsignif[MET_INDEX]);
@@ -562,6 +833,7 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   QCDCuts.Set("nTL_met", met_et[MET_INDEX] < fTL_met_max, met_et[MET_INDEX]);
   // remove Drell-Yan and signal
   QCDCuts.Set("nTL_ht", fTL_ht_min <= HT, HT);
+
   // trigger
   QCDCuts.Set("nTL_jetpt", fJets > 0 ? fTL_jetpt_min <= pfjet_pt[jets[0]]  : false,
 	      fJets ? pfjet_pt[jets[0]] : 0);
@@ -570,6 +842,7 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
 	      nMuonsLoose);
   // require some jets
   QCDCuts.Set("nTL_njets", fTL_njets_min <= fJets, fJets);
+
 
   double ST = HT;
   for (Int_t i = 0; i < nMuonsLoose; i++) {
@@ -595,7 +868,7 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
       // find mass closest to Z mass
       zmass = 91.+TMath::Sign(1., m-91.)*TMath::Min(fabs(91.-zmass), fabs(91.-m));
     }
-    QCDCuts.Set("nTL_zmass", zmass < fTL_zmass_min || fTL_zmass_max < zmass, zmass);
+    QCDCuts.Set("nTL_zmass", zmass > fTL_zmass_min && fTL_zmass_max > zmass, zmass);
     // compute transverse mass of MET and mu (W hypothesis)
     double cos_phi12 = TMath::Cos(DeltaPhi(met_phi[MET_INDEX], mu0.Phi()));
     double MT = TMath::Sqrt(2*met_et[MET_INDEX]*mu0.Pt()*(1.-cos_phi12));
@@ -614,7 +887,11 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
   // apply cuts
   if (!QCDCuts.PassesAll())
     return;
-
+  
+  // if( (fInputType == "data" || fInputType == "mc") && muo_pt[loose_muons[0]] > 59. ) {
+  //     INFO("runid: " << global_run << ":" << lumi_section << ":" << global_event);
+  //   }
+  
   // double-check that there is only one loose muon
   assert(nMuonsLoose == 1);
   assert(fJets >= 1);
@@ -647,18 +924,23 @@ void Analysis::Loop()
   // process and memory info
   ProcInfo_t info;
 
-  // create variables and histograms
+  // create variables
   CreateVariables();
-  CreateHistograms();
 
   // set branch addresses in output tree if necessary
   if (fFill) {
     SetBranchAddresses();
     CreateBranches();
   }
+  
+  // create histograms
+  CreateHistograms();
 
   // create lumi filter (based on JSON file from configuration)
   lumi::RunLumiRanges runcfg(fLumiRanges);
+  
+  // create event filter (based on zipped filter file from configuration)
+  EventFilter hcalevtcfg(fEventFilter.c_str());
 
   // main event loop
   Long64_t nbytes = 0, nb = 0;
@@ -712,11 +994,7 @@ void Analysis::Loop()
 
     // find duplicates
     if (fFindDuplicates) {
-#if VERSION == 78
-      double tempval = global_pthat;
-#elif VERSION == 88 || VERSION == 92 || VERSION == 96
       double tempval = global_qscale;
-#endif
       if (FindDuplicates(global_run, global_event, lumi_section, tempval)) {
 	// depending on severity one could stop here
 	WARNING("Analysis: found duplicate ");
@@ -741,9 +1019,13 @@ void Analysis::Loop()
     fSigMu1->SetXYZT(0, 0, 0, 0);
     fSigJet0->SetXYZT(0, 0, 0, 0);
     fSigJet1->SetXYZT(0, 0, 0, 0);
+    
+    // slepton charge
+    int charge = 0;
+  
     if (fInputType == "signal" || fInputType == "background") {
       try {
-	SignalStudy();
+	SignalStudy(charge);
       }
       catch (std::string message) {
 	WARNING(message);
@@ -756,10 +1038,22 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // filter data on luminosity section - typically golden JSON file
-    if (!runcfg.check(global_run, lumi_section))
+    if(!runcfg.check(global_run, lumi_section)) {
+      DEBUG("Filtering lumi section" << lumi_section << " in global run " << global_run);
       continue;
-    Fill("cutflow", "lumifilter");
-    DEBUG("cutflow " << "lumifilter");
+    }
+
+    //////////////////////////////////////////////////////////////////////
+    // filter data on HCAL laser filter
+    if(!hcalevtcfg.filter(global_run, lumi_section, global_event)) {
+      DEBUG("Filtering event " << global_event << " in lumi section " <<
+	    lumi_section << " in global run " << global_run);
+      continue;
+    }
+
+
+    Fill("cutflow", "evt&lumifilter");
+    DEBUG("cutflow " << "evt&lumifilter");
 
     //////////////////////////////////////////////////////////////////////
     // pileup reweighting
@@ -772,11 +1066,7 @@ void Analysis::Loop()
 		<< " pu_num_int[2] = " << pu_num_int[2] << ", skipping event");
 	continue;
       }
-#if VERSION == 78
-      double weight = LumiWeights_.weight3D(pu_num_int[0], pu_num_int[1], pu_num_int[2]);
-#elif VERSION == 88 || VERSION == 92 || VERSION == 96
       double weight = LumiWeights_.weight(pu_TrueNrInter);
-#endif
       // if (weight != 0)
       global_weight *= weight;
       // else {
@@ -827,11 +1117,7 @@ void Analysis::Loop()
     bool rejection = true;
     // loop over all triggers
     for (int i = 0; i < trig_n && rejection; i++) {
-#if VERSION ==78 || VERSION == 88
-      trigger = unpack(trig_name[i]);
-#else
       trigger = (*trig_name)[i].c_str();
-#endif
       // loop over triggers which are accepted
       for (vector<string>::const_iterator it = fTrigger.begin();
 	   it != fTrigger.end(); it++) {
@@ -851,7 +1137,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // PF jet smearing
-    PFJetSmearing();
+    // PFJetSmearing();
 
     //////////////////////////////////////////////////////////////////////
     // Object ID
@@ -879,43 +1165,14 @@ void Analysis::Loop()
       }
     }
 
+
+
+
+    /////////////////////////////////////////////////////////////////////
     // Muons
-    // see https://twiki.cern.ch/twiki/bin/view/CMSPublic/SWGuideMuonId, tight muon selection
     vector <int> muons;
-    TCutList MuonCuts(histo, global_weight);
     for (int i = 0; i < muo_n; i++){
-      // set cuts
-      MuonCuts.Set("nMuon_pt", muo_pt[i] > 7., muo_pt[i]);
-      MuonCuts.Set("nMuon_eta", fabs(muo_eta[i]) <= 2.1, fabs(muo_eta[i]));
-      MuonCuts.Set("nMuon_id", muo_ID[i][1] == 1, muo_ID[i][1]);
-      MuonCuts.Set("nMuon_d0Tk", fabs(muo_d0Tk[i]) < 0.2, fabs(muo_d0Tk[i]));
-      MuonCuts.Set("nMuon_ValidPixelHitsCm", muo_ValidPixelHitsCm[i] > 0,
-		   muo_ValidPixelHitsCm[i]);
-      MuonCuts.Set("nMuon_TrkChiNormCm", muo_TrkChiNormCm[i] < 10., muo_TrkChiNormCm[i]);
-#if VERSION == 78
-      // @bug: This should be replaced by muo_ValidMuonHitsCm[i]
-      MuonCuts.Set("nMuon_hitsCm", muo_hitsCm[i] > 0, muo_hitsCm[i]);
-      // @bug: this should be replaced by muo_StationsMatched > 1
-      MuonCuts.Set("nMuon_ChambersMatched", muo_ChambersMatched[i] > 1, muo_ChambersMatched[i]);
-      // @bug: this should be replaced by the tracker layers with measurements (see below)
-      MuonCuts.Set("nMuon_ValidTrackerHitsCm", muo_ValidTrackerHitsCm[i] > 10,
-		   muo_ValidTrackerHitsCm[i]);
-      // MuonCuts.Set("nMuon_TrackerLayersMeasCm", muo_TrackerLayersMeasCm[i] > 8,
-      // 		   muo_TrackerLayersMeasCm[i]);
-#elif VERSION == 88 || VERSION == 92 || VERSION == 96
-      MuonCuts.Set("nMuon_hitsCm", muo_ValidMuonHitsCm[i] > 0, muo_ValidMuonHitsCm[i]);
-
-      MuonCuts.Set("nMuon_ispf", muo_isPFMuon[i] == 1, muo_isPFMuon[i]);
-      MuonCuts.Set("nMuon_StationsMatched", muo_StationsMatched[i] > 1, muo_StationsMatched[i]);
-      MuonCuts.Set("nMuon_dzTk", fabs(muo_dzTk[i]) < 0.5, fabs(muo_dzTk[i]));
-      MuonCuts.Set("nMuon_TrackerLayersMeasCm", muo_TrackerLayersMeasCm[i] > 5,
-		   muo_TrackerLayersMeasCm[i]);
-#endif
-
-      MuonCuts.FillHistograms();
-
-      // apply cuts
-      if (MuonCuts.PassesAll()) {
+      if ( MuonCuts(i) ) {
 	muons.push_back(i);
 	TLorentzVector mu(muo_px[i], muo_py[i], muo_pz[i], muo_E[i]);
 	Fill("Muon_m", mu.M());
@@ -923,47 +1180,30 @@ void Analysis::Loop()
     }
     int nMuon = muons.size();
 
+    /////////////////////////////////////////////////////////////////////  
     // Jets
-    // https://twiki.cern.ch/twiki/bin/view/CMS/JetID
     double HT = 0;
     vector <int> jets;
-    TCutList JetCuts(histo, global_weight);
+    
     for (int i = 0; i < pfjet_n; i++) {
-      TLorentzVector jet(pfjet_px[i], pfjet_py[i], pfjet_pz[i], pfjet_E[i]);
-
-      // set cuts
-      JetCuts.Set("nPfJet_pt", pfjet_pt[i] > 15., pfjet_pt[i]);
-      JetCuts.Set("nPfJet_eta", fabs(pfjet_eta[i]) < 2.4, fabs(pfjet_eta[i]));
-      JetCuts.Set("nPfJet_const", pfjet_const[i] > 1, pfjet_const[i]);
-      JetCuts.Set("nPfJet_pff_0", pfjet_PFF[i][0] > 0., pfjet_PFF[i][0]);
-      JetCuts.Set("nPfJet_pff_1", pfjet_PFF[i][1] < 0.99, pfjet_PFF[i][1]);
-      JetCuts.Set("nPfJet_pff_2", pfjet_PFF[i][2] < 0.99, pfjet_PFF[i][2]);
-      JetCuts.Set("nPfJet_pff_3", pfjet_PFF[i][3] < 0.99, pfjet_PFF[i][3]);
-      JetCuts.Set("nPfJet_pfn_0", pfjet_PFN[i][0] > 0, pfjet_PFN[i][0]);
-
-      // A muon might be reconstructed as a PF jet. Therefore take
-      // only those PF jets that do not "coincide" with a tight muon
-      double Rmin = 1000;
-      for (int mu = 0; mu < nMuon; mu++) {
-	int m = muons[mu];
-	if (fabs(muo_d0Tk[m]) > 0.02)
-	  continue;
-	TLorentzVector mu(muo_px[m], muo_py[m], muo_pz[m], muo_E[m]);
-	Rmin = TMath::Min(Rmin, jet.DeltaR(mu));
-      }
-      JetCuts.Set("nPfJet_rmin", Rmin > 0.05, Rmin);
-      JetCuts.FillHistograms();
-
-      // apply cuts
-      if (JetCuts.PassesAll()) {
-	if (pfjet_pt[i] > 30.)
+      if ( JetCuts(i,muons) ) {
+	if ( pfjet_pt[i] > 30. )
 	  jets.push_back(i);
-	HT += pfjet_Et[i];
+	HT += pfjet_pt[i];
       }
-      Fill("PfJet_m", jet.M());
     }
     fJets = jets.size();
 
+    //////////////////////////////////////////////////////////////////////
+    // Electrons
+    int nElectron = 0;
+
+    for (int i = 0; i < ele_n; i++) {
+      if ( ElectronCuts(i) )
+	nElectron++;   
+    }
+    Fill("nElectron", nElectron);
+    
     //////////////////////////////////////////////////////////////////////
     // loose and tight muon id - add isolation and trigger matching
     vector <int> loose_muons;
@@ -971,36 +1211,23 @@ void Analysis::Loop()
     vector <double> tight_dR;
     vector <double> loose_dR;
     for (int i = 0; i < nMuon; i++) {
- #if VERSION == 78 || VERSION == 88
-      // Trigger matching
-      Int_t matched = 0;
-      for (int k = 0; k < muo_trign[muons[i]]; k++) {
-	trigger = unpack(trig_name[muo_trig[muons[i]][k]]);
-	// loop over triggers which are accepted
-	for (vector<string>::const_iterator it = fTrigger.begin();
-	     it != fTrigger.end(); it++) {
-	  if (trigger.Contains(it->c_str())) {
-	    // OK, trigger found
-	    matched++;
-	  }
-	}
-      }
-      Fill("nMuon_matched", matched);
-      // require this muon to be matched
-      if (matched == 0)
+      vector <TString> muonTriggerFilters;
+      // unique triggerfilters to match to
+      muonTriggerFilters.push_back("hltDiMuonGlb17Glb8DzFiltered0p2"); // HLT_Mu17_Mu8_v
+      muonTriggerFilters.push_back("hltDiMuonGlb17Trk8DzFiltered0p2"); // HLT_Mu17_TkMu8_v      
+      muonTriggerFilters.push_back("hltDiMuonGlb22Trk8DzFiltered0p2"); // HLT_Mu22_TkMu8_v
+      muonTriggerFilters.push_back("hltDiMuonGlb22Trk22DzFiltered0p2"); // HLT_Mu22_TkMu22_v
+      
+      //Fill("nMuon_matched", matched);
+      if ( !TriggerMatched(i, muonTriggerFilters) )
 	continue;
-#endif
-
+      // muo_PFiso
       // relative isolation
-      double relIso = 1000.;
+
+      //I = [ sumChargedHadronPt + max(0.,sumNeutralHadronPt + sumPhotonPt - 0.5 * sumPUPt) ] / pt
       int m = muons[i];
-      double E = muo_TrkIso[m] + muo_ECalIso[m] + muo_HCalIso[m];
-      if (muo_pt[m] < 15.) {
-	relIso = E / 15.;
-      }
-      else {
-	relIso = E / muo_pt[m];
-      }
+      double relIso = ( muo_PFiso[m][0] + max(0., muo_PFiso[m][2] + muo_PFiso[m][3] - 0.5 * muo_PFiso[m][6]) ) /  muo_pt[m];
+
 
       // distance to next jet
       double Rmin = 1000;
@@ -1039,7 +1266,7 @@ void Analysis::Loop()
 	loose_muons.push_back(muons[i]);
 	loose_dR.push_back(Rmin);
       }
-      if (relIso < 0.15 && fabs(muo_d0Tk[m]) < 0.02) {
+      if (relIso < 0.12 && fabs(muo_d0Tk[i]) < 0.02) {
 	tight_muons.push_back(muons[i]);
 	tight_dR.push_back(Rmin);
       }
@@ -1047,89 +1274,27 @@ void Analysis::Loop()
     Int_t nMuonsLoose = loose_muons.size();
     Int_t nMuonsTight = tight_muons.size();
 
-    // Electrons
-    // https://twiki.cern.ch/twiki/bin/view/CMS/SimpleCutBasedEleID
-    int nElectron = 0;
-    TCutList ElectronCuts(histo, global_weight);
-    for (int i = 0; i < ele_n; i++) {
-      // cut values for WP80 (to be moved to configuration file)
-      const Double_t cutconvdcot = 0.02;
-      const Double_t cutconvdist = 0.02;
-      const Double_t cutMissingHits = 0.;
-      const Double_t cutDr03TkSumPtele_ptB = 0.09;
-      const Double_t cutDr03TkSumPtele_ptE = 0.04;
-      const Double_t cutDr03HCalSumEtele_EtB = 0.1;
-      const Double_t cutDr03HCalSumEtele_EtE = 0.025;
-      const Double_t cutDr03ECalSumEtele_EtB = 0.07;
-      const Double_t cutDr03ECalSumEtele_EtE = 0.05;
-      const Double_t cutHCalOverEmB = 0.04;
-      const Double_t cutHCalOverEmE = 0.025;
-      const Double_t cutSigmaIetaIetaB = 0.01;
-      const Double_t cutSigmaIetaIetaE = 0.03;
-      const Double_t cutdPhiSCTrackAtVtxB = 0.06;
-      const Double_t cutdPhiSCTrackAtVtxE = 0.03;
-      const Double_t cutdEtaSCTrackAtVtxB = 0.004;
-      const Double_t cutdEtaSCTrackAtVtxE = 0.007;
 
-      // own cuts
-      ElectronCuts.Set("pt", ele_pt[i] > 15.0, ele_pt[i]);
-      // common cuts
-      ElectronCuts.Set("MissingHits", ele_TrkExpHitsInner[i] <= cutMissingHits, 0);
-      ElectronCuts.Set("Dist", fabs(ele_convdist[i]) > cutconvdist, 0.);
-      ElectronCuts.Set("DCotT", fabs(ele_convdcot [i]) > cutconvdcot, 0.);
-      if (fabs(ele_SCeta[i])<1.4442) {
-	// Barrel
-	ElectronCuts.Set("trackRel03", ele_Dr03TkSumPt[i]/ele_pt[i] < cutDr03TkSumPtele_ptB, 0.);
-	ElectronCuts.Set("ecalRel03", ele_Dr03ECalSumEt[i]/ele_Et[i] < cutDr03ECalSumEtele_EtB, 0.);
-	ElectronCuts.Set("hcalRel03", ele_Dr03HCalSumEt[i]/ele_Et[i] < cutDr03HCalSumEtele_EtB, 0.);
-	ElectronCuts.Set("SigmaIEtaIEta", ele_SigmaIetaIeta[i] < cutSigmaIetaIetaB, 0.);
-	ElectronCuts.Set("DPhi", fabs(ele_dPhiSCTrackAtVtx[i]) < cutdPhiSCTrackAtVtxB, 0.);
-	ElectronCuts.Set("DEta", fabs(ele_dEtaSCTrackAtVtx[i]) < cutdEtaSCTrackAtVtxB, 0.);
-	ElectronCuts.Set("HoE", ele_HCalOverEm[i] < cutHCalOverEmB, 0.);
-      }
-      else if (1.566 < fabs(ele_SCeta[i]) && fabs(ele_SCeta[i]) < 2.5) {
-	// Endcap
-	ElectronCuts.Set("trackRel03", ele_Dr03TkSumPt[i]/ele_pt[i] < cutDr03TkSumPtele_ptE, 0.);
-	ElectronCuts.Set("ecalRel03", ele_Dr03ECalSumEt[i]/ele_Et[i] < cutDr03ECalSumEtele_EtE, 0.);
-	ElectronCuts.Set("hcalRel03", ele_Dr03HCalSumEt[i]/ele_Et[i] < cutDr03HCalSumEtele_EtE, 0.);
-	ElectronCuts.Set("SigmaIEtaIEta", ele_SigmaIetaIeta[i] < cutSigmaIetaIetaE, 0.);
-	ElectronCuts.Set("DPhi", fabs(ele_dPhiSCTrackAtVtx[i]) < cutdPhiSCTrackAtVtxE, 0.);
-	ElectronCuts.Set("DEta", fabs(ele_dEtaSCTrackAtVtx[i]) < cutdEtaSCTrackAtVtxE, 0.);
-	ElectronCuts.Set("HoE", ele_HCalOverEm[i] < cutHCalOverEmE, 0.);
-      }
-      else {
-	// ignore electrons in gap between barrel and endcap
-      }
-
-      // fill N-1
-      if (ElectronCuts.PassesAllBut("pt"))
-	Fill("nElectron_pt", ele_pt[i]);
-
-      // apply cuts
-      if (ElectronCuts.PassesAll())
-	nElectron++;
-    }
 
     // Photons
     // https://twiki.cern.ch/twiki/bin/viewauth/CMS/Vgamma2011PhotonID
-// Variable 	Method 	recommended cuts
-// Pixel Seed Veto 	hasPixelSeed() 	YES
-// H/E 	hadronicOverEm() 	< 0.05
-// shower shape 	sigmaIetaIeta() 	< 0.011 (EB), < 0.03 (EE)
-// hollow cone track isolation 	trkSumPtHollowConeDR04() 	< 2.0 + 0.001 x Et + 0.0167 x rho25 (EB), < 2.0 + 0.001 x Et + 0.032 x rho25 (EE)
-// Jurrasic ECAL Isolation 	ecalRecHitSumEtConeDR04() 	< 4.2 + 0.006 x Et + 0.183 x rho25 (EB), < 4.2 + 0.006 x Et + 0.090 x rho25 (EE)
-// tower-based HCAL Isolation 	hcalTowerSumEtConeDR04() 	< 2.2 + 0.0025 x Et + 0.062 x rho25 (EB), < 2.2 + 0.0025 x Et + 0.180 x rho25 (EE)
+    // Variable 	Method 	recommended cuts
+    // Pixel Seed Veto 	hasPixelSeed() 	YES
+    // H/E 	hadronicOverEm() 	< 0.05
+    // shower shape 	sigmaIetaIeta() 	< 0.011 (EB), < 0.03 (EE)
+    // hollow cone track isolation 	trkSumPtHollowConeDR04() 	< 2.0 + 0.001 x Et + 0.0167 x rho25 (EB), < 2.0 + 0.001 x Et + 0.032 x rho25 (EE)
+    // Jurrasic ECAL Isolation 	ecalRecHitSumEtConeDR04() 	< 4.2 + 0.006 x Et + 0.183 x rho25 (EB), < 4.2 + 0.006 x Et + 0.090 x rho25 (EE)
+    // tower-based HCAL Isolation 	hcalTowerSumEtConeDR04() 	< 2.2 + 0.0025 x Et + 0.062 x rho25 (EB), < 2.2 + 0.0025 x Et + 0.180 x rho25 (EE)
 
-//     Additionally apply spike cleaning: sigmaIEtaIEta > 0.001 and sigmaIPhiIPhi > 0.001 in Barrel region only
-//     Et is the photon transverse energy
-//     rho25 is obtained by the following piece of code
+    // Additionally apply spike cleaning: sigmaIEtaIEta > 0.001 and sigmaIPhiIPhi > 0.001 in Barrel region only
+    // Et is the photon transverse energy
+    // rho25 is obtained by the following piece of code
 
-// process.load('RecoJets.Configuration.RecoPFJets_cff')
-// process.kt6PFJets25 = process.kt6PFJets.clone( doRhoFastjet = True )
-// process.kt6PFJets25.Rho_EtaMax = cms.double(2.5)
-// process.fjSequence25 = cms.Sequence( process.kt6PFJets25 )
-
-
+    // process.load('RecoJets.Configuration.RecoPFJets_cff')
+    // process.kt6PFJets25 = process.kt6PFJets.clone( doRhoFastjet = True )
+    // process.kt6PFJets25.Rho_EtaMax = cms.double(2.5)
+    // process.fjSequence25 = cms.Sequence( process.kt6PFJets25 )
+    
     DEBUG("cutflow " << "objectID");
 
     // Fill vertex plots before event cleaning and object cuts
@@ -1143,27 +1308,28 @@ void Analysis::Loop()
     }
 
     //////////////////////////////////////////////////////////////////////
-    // Event cleaning
+    // Event cleaning    
+    TCutList EventFilterList(histo, global_weight);
 
-    Fill("noise_ecal_r9", noise_ecal_r9);
-    Fill("nElectron", nElectron);
-    Fill("HBHE_Noise", filterHBHENoise() ? 1 : 0);
-    // require good vertex, no electron in event, no ecal noise, no HBHE noise
-    if (nVertex < 1 || nElectron > 0 || (noise_ecal_pt > 3. && noise_ecal_r9 > 0.9)
-	|| !filterHBHENoise()) {
-      continue;
+    for (Int_t i = 0; i < eventfilter_n; i++) {
+      TString filterName = eventfilter_names->at(i);
+      if ( filterName.Contains("scrapingFilter")       ||
+	   filterName.Contains("ECALDeadCellFilterBE") ||
+	   filterName.Contains("MuonFailureFilter") ) {
+	continue;
+      }
+
+      EventFilterList.Set(eventfilter_names->at(i), eventfilter_results[i], eventfilter_results[i]);
     }
-    // @todo: filter bad HCAL laser events
-    // if (!ef->filter(global_run, global_ls, global_event)) {
-    //   continue;
-    // }
+    EventFilterList.FillHistograms();
+    if ( nVertex < 1 || nElectron > 0 || !EventFilterList.PassesAll() ) continue;
 
     Fill("cutflow", "cleaning");
     DEBUG("cutflow " << "cleaning");
 
     //////////////////////////////////////////////////////////////////////
     // fake rate study: tight-to-loose ratio calculation
-    TightLooseRatioCalculation(loose_muons, tight_muons, jets, HT);
+    TightLooseRatioCalculation(loose_muons, tight_muons, muons, jets, HT);
 
     //////////////////////////////////////////////////////////////////////
     // loose muon id
@@ -1295,12 +1461,8 @@ void Analysis::Loop()
 	muo_pt[fMuoId[1]] <= 15. ||
 	muon_dR[0] < 0.4 ||
 	muon_dR[1] < 0.4 ||
-#if VERSION == 78
-	fabs(muo_dzbsCm[fMuoId[0]]-muo_dzbsCm[fMuoId[1]]) > 0.08
-#elif VERSION == 88 || VERSION == 92 || VERSION == 96
 	fabs(muo_dzTk[fMuoId[0]]-muo_dzTk[fMuoId[1]]) > 0.08
-#endif
-      ) {
+	) {
       continue;
     }
     Fill("cutflow", "muonID");
@@ -1358,11 +1520,6 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // MET cut with control regions
-#if VERSION==78
-    Fill("met3_met6", met_et[3], met_et[6]);
-    Fill("met3_met7", met_et[3], met_et[7]);
-    Fill("met6_met7", met_et[6], met_et[7]);
-#endif
     if (met_et[MET_INDEX] >= 50.) {
       // fill some histograms for inverse cut (needed for cross-checks), control region
       Fill("CR1_m_mumu", m_mumu);
@@ -1448,6 +1605,29 @@ void Analysis::Loop()
     Fill("btag_m_smu_chi", SmuonMass, GauginoMass);
 
     FillNoWeight("log_weight", TMath::Log(global_weight)/TMath::Log(10.));
+
+
+    // Signal counter after cuts
+    Fill("Cut_signal_counter", 0.);
+    map<string, vector<int> > simpleParticles;
+    int modelid = IsSimplifiedModel(simpleParticles);
+    for (int i = 1; i<=7; i++) {
+      if (modelid == i) {
+	if (modelid == 6 && fabs(charge) == 0) {
+	  Fill("Cut_signal_counter", 8);
+	  continue;
+	}
+	if (modelid == 7 && fabs(charge) == 0) {
+	  Fill("Cut_signal_counter", 9);
+	  continue;
+	}
+	Fill("Cut_signal_counter",i);
+      } 
+      else if (modelid == 0) {
+	//TruthDump();
+      }
+    }
+
 
     //////////////////////////////////////////////////////////////////////
     // fill output tree
@@ -1579,7 +1759,21 @@ void Analysis::CreateHistograms()
   CreateHisto("nObj_vtx_bs", "|r_{bs} - r_{vtx}|@cm", 100, 0, 10);
 
   // Object selection: electron
+  CreateHisto("nElectron", "number of electrons", 10, 0, 10);
   CreateHisto("nElectron_pt", "Electron p_{T}@GeV", 1000, 0, 1000);
+  CreateHisto("nElectron_DEta", "Electron #Delta #eta", 50, 0, 3);
+  CreateHisto("nElectron_DPhi", "Electron #Delta #phi", 315, 0, 3.15);
+  CreateHisto("nElectron_SigmaIEtaIEta", "Electron #sigma I#eta I#eta", 10, 0, 1);
+  CreateHisto("nElectron_HoE", "Electron HCal / E", 100, 0, 0.2);
+  CreateHisto("nElectron_1oE-1oP", "Electron 1/E - 1/p@GeV", 100, 0, 0.06);
+  CreateHisto("nElectron_d0vtx", "Electron d0@cm", 100, 0, 0.025);
+  CreateHisto("nElectron_dZvtx", "Electron dz@cm", 100, 0, 0.15);
+  CreateHisto("nElectron_HasMatchedConversions", "Electrons with  matched conversions", 2, 0, 1.);
+  CreateHisto("nElectron_MissingHits", "Electron missing hits", 2, 0, 2.);
+  CreateHisto("nElectron_HCalIsoOpt", "Electron HCal Iso / pt", 100, 0, 0.4);
+  CreateHisto("nElectron_ECalIsoOpt", "Electron ECal Iso / pt", 100, 0, 0.4);
+  CreateHisto("nElectron_TkIsoOpt", "Electron Tk Iso / pt", 100, 0, 0.4);
+  CreateHisto("nElectron_pfIsoOpt", "Electron PF Iso / pt", 100, 0, 0.3);
 
   // Object selection: muon
   CreateHisto("nMuon_pt", "#mu p_{T}@GeV", 1000, 0, 1000);
@@ -1626,8 +1820,13 @@ void Analysis::CreateHistograms()
 
   // event cleaning
   CreateHisto("noise_ecal_r9", "noise_ecal_r9", 100, 0, 1);
-  CreateHisto("nElectron", "number of electrons", 10, 0, 10);
-
+  CreateHisto("p_CSCHaloFilter", "p_CSCHaloFilter", 2, 0, 2);
+  CreateHisto("p_HCALLaserFilter", "p_HCALLaserFilter", 2, 0, 2);
+  CreateHisto("p_ECALDeadCellFilterTP", "p_ECALDeadCellFilterTP", 2, 0, 2);
+  CreateHisto("p_BadSuperCrystalFilter", "p_BadSuperCrystalFilter", 2, 0, 2);
+  CreateHisto("p_TrackingFailureFilter", "p_TrackingFailureFilter", 2, 0, 2);
+  CreateHisto("p_HBHENoiseFilter", "p_HBHENoiseFilter", 2, 0, 2);
+  CreateHisto("p_XtalsLargeLaser", "p_XtalsLargeLaser", 2, 0, 2);
   CreateHisto("HBHE_Noise", "HBHE noise filter result", 2, 0, 2);
   CreateHisto("noise_hcal_minE2Over10TS", "noise_hcal_minE2Over10TS", 2, 0, 2);
   CreateHisto("noise_hcal_maxE2Over10TS", "noise_hcal_maxE2Over10TS", 2, 0, 2);
@@ -1643,6 +1842,8 @@ void Analysis::CreateHistograms()
   CreateHisto("noise_hcal_isolatedNoiseSumEt", "noise_hcal_isolatedNoiseSumEt", 2, 0, 2);
   CreateHisto("noise_hcal_HasBadRBXTS4TS5", "noise_hcal_HasBadRBXTS4TS5", 2, 0, 2);
 
+  
+
   // checks for MC production
   CreateHisto("check_nmuon", "number of muons", 5, -0.5, 4.5);
   CreateHisto("check_njets", "number of jets", 8, -0.5, 7.5);
@@ -1651,9 +1852,9 @@ void Analysis::CreateHistograms()
 
   // Tight-to-loose ratio
   CreateHisto("TightMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV",
-	      11, 15, 70, 5, 0, 2.5, 6, 40, 100);
+	      11, 15, 100, 5, 0, 2.5, 6, 40, 100);
   CreateHisto("LooseMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV",
-	      11, 15, 70, 5, 0, 2.5, 6, 40, 100);
+	      11, 15, 100, 5, 0, 2.5, 6, 40, 100);
 
   CreateHisto("nTL_met", "MET@GeV", 100, 0, 500);
   CreateHisto("nTL_jetpt", "leading jet pt@GeV", 150, 0, 1500);
@@ -1678,6 +1879,7 @@ void Analysis::CreateHistograms()
   CreateHisto("TL_nmutight", "number of tight muons", 5, -0.5, 4.5);
   CreateHisto("TL_fakes", "fake rate requests:pt_{#mu} @GeV:#eta_{#mu}",
 	      37, 15, 200, 6, 0, 3.0);
+
 
   // double-fake estimate
   CreateHisto("DF_pt", "p_{T}(#mu) (doublefake)@GeV", 5, 0, 50);
@@ -1743,6 +1945,10 @@ void Analysis::CreateHistograms()
   CreateHisto("weight", "weight", 200, 0., 10.);
   CreateHisto("log_global_weight", "log(global_weight)", 100, -5, 5);
   CreateHisto("log_weight", "log(weight)", 100, -5, 5);
+  
+  // signalstudy
+  CreateHisto("Sig_signal_counter", "Signal Counter", 10, 0., 10.);
+  CreateHisto("Cut_signal_counter", "Signal Counter", 10, 0., 10.);
 }
 
 // duplicates finder
@@ -1901,9 +2107,9 @@ double Analysis::GetFakeRate(double muopt, double eta, double jetpt)
     else
       THROW("unknown fake rate method: " + fFakeRateMethod);
   }
-  if (muopt > 70) {
+  if (muopt > 100) {
     if (fFakeRateMethod == "lastbin") {
-      muopt = 69.99;
+      muopt = 99.99;
     }
     else if (fFakeRateMethod == "zero") {
       return 0;
@@ -1934,7 +2140,8 @@ double Analysis::GetFakeRate(double muopt, double eta, double jetpt)
     WARNING("unexpected value " << fakeRate << " for T/L ratio in Analysis::GetFakeRate()");
     WARNING("muo pt= " << muopt << ", eta = " << eta << ", jetpt = " << jetpt);
     if (fakeRate < 0)
-      THROW("T/L ratio equals to or less than 0, cannot proceed");
+      //THROW("T/L ratio equals to or less than 0, cannot proceed");
+      return 0.001;
     if (fakeRate >= 1)
       THROW("T/L ratio equals to or larger than 1, cannot proceed");
   }
@@ -1951,167 +2158,28 @@ Double_t Analysis::DeltaPhi(double a, double b) {
     return  2.*TMath::Pi() - temp;
 }
 
-/*
- * Return true if event has no anomalous HBHE noise. This function mimicks the
- * HBHENoiseFilterResultProducer which can be found on
- *
- * http://cmslxr.fnal.gov/lxr/source/CommonTools/RecoAlgos/plugins/HBHENoiseFilterResultProducer.cc
- *
- * and the values are documented at
- *
- * https://twiki.cern.ch/twiki/bin/view/CMS/HBHEAnomalousSignals2011
- */
-bool Analysis::filterHBHENoise()
-{
-#if VERSION == 88
-  return noise_HBHE_filter_result;
-#elif VERSION == 78
-  bool result = true;
-
-  Double_t minRatio = -999;
-  Double_t maxRatio = 999;
-  Int_t minHPDHits = 17;
-  Int_t minRBXHits = 999;
-  Int_t minHPDNoOtherHits = 10;
-  Double_t minZeros = 10;
-  Double_t minHighEHitTime = -9999.0;
-  Double_t maxHighEHitTime = 9999.0;
-  Double_t maxRBXEMF = -999.0;
-  Double_t minNumIsolatedNoiseChannels = 9999;
-  Double_t minIsolatedNoiseSumE = 9999;
-  Double_t minIsolatedNoiseSumEt = 9999;
-
-  if (noise_hcal_minE2Over10TS < minRatio) {
-    result = false;
-    Fill("noise_hcal_minE2Over10TS", 0.);
-  }
-  else {
-    Fill("noise_hcal_minE2Over10TS", 1.);
-  }
-  if (noise_hcal_maxE2Over10TS > maxRatio) {
-    result = false;
-    Fill("noise_hcal_maxE2Over10TS", 0.);
-  }
-  else {
-    Fill("noise_hcal_maxE2Over10TS", 1.);
-  }
-  if (noise_hcal_maxHPDHits >= minHPDHits) {
-    result = false;
-    Fill("noise_hcal_maxHPDHits", 0.);
-  }
-  else {
-    Fill("noise_hcal_maxHPDHits", 1.);
-  }
-  if (noise_hcal_maxRBXHits >= minRBXHits) {
-    result = false;
-    Fill("noise_hcal_maxRBXHits", 0.);
-  }
-  else {
-    Fill("noise_hcal_maxRBXHits", 1.);
-  }
-  if (noise_hcal_maxHPDNoOtherHits >= minHPDNoOtherHits) {
-    result = false;
-    Fill("noise_hcal_maxHPDNoOtherHits", 0.);
-  }
-  else {
-    Fill("noise_hcal_maxHPDNoOtherHits", 1.);
-  }
-  if (noise_hcal_maxZeros >= minZeros) {
-    result = false;
-    Fill("noise_hcal_maxZeros", 0.);
-  }
-  else {
-    Fill("noise_hcal_maxZeros", 1.);
-  }
-  if (noise_hcal_min25GeVHitTime < minHighEHitTime) {
-    result = false;
-    Fill("noise_hcal_min25GeVHitTime", 0.);
-  }
-  else {
-    Fill("noise_hcal_min25GeVHitTime", 1.);
-  }
-  if (noise_hcal_max25GeVHitTime > maxHighEHitTime) {
-    result = false;
-    Fill("noise_hcal_max25GeVHitTime", 0.);
-  }
-  else {
-    Fill("noise_hcal_max25GeVHitTime", 1.);
-  }
-  if (noise_hcal_minRBXEMF < maxRBXEMF) {
-    result = false;
-    Fill("noise_hcal_minRBXEMF", 0.);
-  }
-  else {
-    Fill("noise_hcal_minRBXEMF", 1.);
-  }
-  if (noise_hcal_numIsolatedNoiseChannels >= minNumIsolatedNoiseChannels) {
-    result = false;
-    Fill("noise_hcal_numIsolatedNoiseChannels", 0.);
-  }
-  else {
-    Fill("noise_hcal_numIsolatedNoiseChannels", 1.);
-  }
-  if (noise_hcal_isolatedNoiseSumE >= minIsolatedNoiseSumE) {
-    result = false;
-    Fill("noise_hcal_isolatedNoiseSumE", 0.);
-  }
-  else {
-    Fill("noise_hcal_isolatedNoiseSumE", 1.);
-  }
-  if (noise_hcal_isolatedNoiseSumEt >= minIsolatedNoiseSumEt) {
-    result = false;
-    Fill("noise_hcal_isolatedNoiseSumEt", 0.);
-  }
-  else {
-    Fill("noise_hcal_isolatedNoiseSumEt", 1.);
-  }
-  if (noise_hcal_HasBadRBXTS4TS5 == 1) {
-    result = false;
-    Fill("noise_hcal_HasBadRBXTS4TS5", 0.);
-  }
-  else {
-    Fill("noise_hcal_HasBadRBXTS4TS5", 1.);
-  }
-  return result;
-#else
-  static bool first = true;
-  if (first) {
-    WARNING("filterHBHENoise does not work yet in this version");
-    first = false;
-  }
-  return true;
-#endif
-}
 
 double Analysis::GetJERScale(double eta)
 {
   eta = TMath::Abs(eta);
-  if (fJER_official) {
-    // values taken from https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
-    // but since these are scale-factors, subtracted by one
-    if (eta < 0.5) {
-      return 0.052; // +-0.012+0.062-0.061
-    }
-    else if (eta < 1.1) {
-      return 0.057; // +-0.012+0.056-0.055
-    }
-    else if (eta < 1.7) {
-      return 0.096; // +-0.017+0.063-0.062
-    }
-    else if (eta < 2.3) {
-      return 0.134; // +-0.035+0.087-0.085
-    }
-    else if (eta < 5.0) {
-      return 0.288; // +-0.127+0.155-0.153 
-    }
-    else {
-      DEBUG("jet eta = " << eta << " out of range 0..5 in Analysis::GetJERScale");
-      // return some value
-      return 0.288;
-    }
+  // values taken from hDottps://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
+  // but since these are scale-factors, subtracted by one
+  if (eta < 1.1) {
+    return 0.066; //+-0.007+0.07-0.072 
+  }
+  else if (eta < 1.7) {
+    return 0.191; //+-0.019+0.06-0.062 
+  }
+  else if (eta < 2.3) {
+    return 0.096; //+-0.030+0.08-0.085 
+  }
+  else if (eta < 5.0) {
+    return 0.166; //+-0.050+0.19-0.199 
   }
   else {
-    return fJER_scale;
+    DEBUG("jet eta = " << eta << " out of range 0..5 in Analysis::GetJERScale");
+    // return some value
+    return 0.166;
   }
 }
 
@@ -2121,7 +2189,7 @@ void Analysis::PFJetSmearing()
   // save old value for later use
   fJER_met_old = met_et[MET_INDEX];
   // do not smear data
-  if (fInputType == "data" || fJER_scale == 0.)
+  if (fInputType == "data" || fJER_calculation )
     return;
 
   // loop over all jets
@@ -2137,34 +2205,31 @@ void Analysis::PFJetSmearing()
         if (dR < 0.5) {
 	  // if (dpT > 0)
 	  //   WARNING("Analysis::PFJetSmearing() found more than one matching truth jet");
-	  sum_truth += truthjet_E[t];
+	  sum_truth += truthjet_pt[t];
 	  // truth_jet = t;
         }
       }
-      double dE = 0;
+
+      double dpt = 0;
       double scale = 0;
       if (sum_truth == 0) {
 	// no truth jets found
-
-	// @TODO this is an ad-hoc solution taken from approximate width of
-	// JER_deltae distribution, need to respect pT and eta dependence...
-	dE = gRandom->BreitWigner(fJER_center, fJER_smear);
-	scale = dE/pfjet_E[j];
-	DEBUG("Random: dE = " << dE << ", scale = " << scale);
+	dpt = TMath::Sqrt( TMath::Power(GetJERScale(pfjet_eta[j])+1,2) - 1 ) * fJER_smear;
+	scale = dpt/pfjet_pt[j];
+	DEBUG("Random: dpt = " << dpt << ", scale = " << scale);
       }
       else {
-	dE = pfjet_E[j] - sum_truth;
-	scale = dE/pfjet_E[j];
+	dpt = pfjet_pt[j] - sum_truth;
+	scale = dpt/pfjet_pt[j];
 	// if (truth_jet != pfjet_truth[j])
 	//   WARNING("Calculated true jet: " << truth_jet << ", from SUSYAna: " << pfjet_truth[j]);
-	DEBUG("Scaled: dE = " << dE << ", scale = " << scale);
+	DEBUG("Scaled: dpt = " << dpt << ", scale = " << scale);
       }
       // correct MET
       double rescale = GetJERScale(pfjet_eta[j])*scale;
-      met_ex[MET_INDEX]   -= pfjet_px[j] * rescale;
-      met_ey[MET_INDEX]   -= pfjet_py[j] * rescale;
 
       // correct PF jets
+      // @TODO E rescaling pointless if you changed to pt?
       double ratio = 1. + rescale;
       DEBUG("ratio = " << ratio);
       pfjet_E[j]  *= ratio;
@@ -2176,11 +2241,6 @@ void Analysis::PFJetSmearing()
       pfjet_pz[j] *= ratio;
     }
   }
-
-  // calculate new MET
-  TVector3 mpf(met_ex[MET_INDEX], met_ey[MET_INDEX], 0.);
-  met_phi[MET_INDEX] = mpf.Phi();
-  met_et[MET_INDEX]  = mpf.Perp();
 }
 
 void Analysis::PFJetSmearingCalculation()
@@ -2188,14 +2248,14 @@ void Analysis::PFJetSmearingCalculation()
   TH2D * h = histo2["pfmet_scaled"];
   if (h == 0)
     THROW("histogram pfmet_scaled not found");
+
+  if (fInputType == "data" || !fJER_calculation )
+    return;
+
   // loop over all bins
   for (int biny = 1; biny < h->GetNbinsY()+1; biny++) {
     // get value at bin center
-    double f = h->GetYaxis()->GetBinLowEdge(biny)+h->GetYaxis()->GetBinWidth(biny)/2.;
-
-    // initialize MET values to original values
-    double mymet_x = met_ex[MET_INDEX];
-    double mymet_y = met_ey[MET_INDEX];
+    //double f = h->GetYaxis()->GetBinLowEdge(biny)+h->GetYaxis()->GetBinWidth(biny)/2.;
 
     // loop over all jets
     for (int j = 0; j < pfjet_n; j++) {
@@ -2207,43 +2267,31 @@ void Analysis::PFJetSmearingCalculation()
 	for (int t = 0; t < truthjet_n; t++) {
 	  double dR = sqrt(pow(pfjet_eta[j]-truthjet_eta[t], 2) +
 			   pow(DeltaPhi(pfjet_phi[j],truthjet_phi[t]), 2));
+
 	  if (dR < 0.5) {
-	  // if (dpT > 0)
-	  //   WARNING("Analysis::PFJetSmearingCalculation() found more than one matching truth jet");
-	    sum_truth += truthjet_E[t];
+	    // if (dpT > 0)
+	    //   WARNING("Analysis::PFJetSmearing() found more than one matching truth jet");
+	    sum_truth += truthjet_pt[t];
 	    // truth_jet = t;
 	  }
 	}
-	double dE = 0;
+
+	double dpt = 0;
 	double scale = 0;
 	if (sum_truth == 0) {
-	  // no truth jets found, smear with Gaussian
-
-	  // @TODO this is an ad-hoc solution taken from approximate width of
-	  // JER_deltae distribution, need to respect pT and eta dependence...
-	  dE = gRandom->BreitWigner(fJER_center, fJER_smear);
-	  scale = dE/pfjet_E[j];
+	  // no truth jets found, so no calculation to be done
 	}
 	else {
-	  dE = pfjet_E[j] - sum_truth;
-	  scale = dE/pfjet_E[j];
+	  dpt = pfjet_pt[j] - sum_truth;
+	  scale = dpt/pfjet_pt[j];
 	  // if (truth_jet != pfjet_truth[j])
 	  // 	WARNING("Calculated true jet: " << truth_jet << ", from SUSYAna: " << pfjet_truth[j]);
-	  Fill("JER_deltae", dE);
-	  Fill("JER_deltaepteta", dE, pfjet_pt[j], pfjet_eta[j]);
+	  Fill("JER_deltae", dpt);
+	  Fill("JER_deltaepteta", dpt, pfjet_pt[j], pfjet_eta[j]);
 	  Fill("JER_scale", scale);
 	}
-
-	// correct MET
-	mymet_x -= pfjet_px[j] * f * scale;
-	mymet_y -= pfjet_py[j] * f * scale;
       }
     }
-
-    // calculate new MET
-    TVector3 mpf(mymet_x, mymet_y, 0.);
-    double met = mpf.Perp();
-    Fill("pfmet_scaled", met, f);
   }
 }
 

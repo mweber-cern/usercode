@@ -36,7 +36,7 @@ int main(int argc, char *argv[])
   INFO("");
   INFO("######################################################################");
   INFO("#                                                                    #");
-  INFO("# Start executing analyzer version " << VERSION << "                               #");
+  INFO("# Start executing analyzer version 96                                #");
   INFO("#                                                                    #");
   INFO("######################################################################");
   INFO("");

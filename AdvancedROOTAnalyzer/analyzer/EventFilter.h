@@ -8,13 +8,13 @@
 class EventFilter {
   
 public :
-  explicit EventFilter(const char * eventFileName, bool verbose = false);
+  explicit EventFilter(std::string eventFileName, bool verbose = false);
   ~EventFilter();
 
-  bool filter(int run, int lumisection, int event);
+  bool filter(int run, unsigned int lumisection, unsigned int event);
 
 private:
-  void readEventListFile(const char * eventFileName);
+  void readEventListFile(std::string eventFileName);
   void addEventString(const std::string & eventString);
         
   typedef std::vector< std::string >::iterator strVecI;

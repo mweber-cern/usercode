@@ -18,20 +18,8 @@
 
 #include "BTagging.h"
 
-#if VERSION == 78
-#include "TreeContent_v78.h"
-#include "LumiReweightingStandAlone_v78.h"
-#elif VERSION == 88
-#include "TreeContent_v88.h"
-#include "LumiReweightingStandAlone_v88.h"
-#elif VERSION == 92
-#include "TreeContent_v92.h"
-#include "LumiReweightingStandAlone_v92.h"
-#elif VERSION == 96
-#include "TreeContent_v96.h"
-#include "LumiReweightingStandAlone_v96.h"
-#endif
-
+#include "TreeContent.h"
+#include "LumiReweightingStandAlone.h"
 
 using namespace std;
 
@@ -43,6 +31,7 @@ protected:
 
   //////////////////////////////////////////////////////////////////////
   // configuration options
+
   bool      fFill;      // fill output tree?
   string    fInputType; // type of input data
   string    fSample;    // the sample name
@@ -65,6 +54,7 @@ protected:
   vector<string> fTrigger; // trigger selection
   bool      fForceUnprescaledTriggers; // Force unprescaled triggers
   string    fLumiRanges; // lumi ranges (JSON file) for data processing
+  string    fEventFilter; // zipped event filter file for data processing
   Double_t  fDeltaPhiMin; // max delta phi (leading mu, gaugino)
 
   // cuts for T/L ratio
@@ -77,12 +67,12 @@ protected:
   Double_t fTL_zmass_max;
   Double_t fTL_mupt_min;
   Double_t fTL_jetdphi_min;
+  Double_t fTL_mumudphi_max;
   Double_t fTL_mt_max;
   Double_t fTL_njets_min;
 
   // values for smearing jet energies (JER)
-  Bool_t   fJER_official;
-  Double_t fJER_scale;
+  Bool_t   fJER_calculation;
   Double_t fJER_center;
   Double_t fJER_smear;
   Double_t fJER_met_old;
@@ -128,16 +118,24 @@ protected:
   //////////////////////////////////////////////////////////////////////
   // analysis functions
   void ReconstructFinalState(map<char, vector<int> > & particles, int vertex);
-  void SignalStudy();
+  void GetSimplifiedModelParticles(map<string, vector<int> > & particles, int vertex);
+  int IsSimplifiedModel(map<string, vector<int> > & particles);
+  void SignalStudy(int & charge);
   void TightLooseRatioCalculation(const vector<int> & loose_muons,
 				  const vector<int> & tight_muons,
+				  const vector<int> & muons,
 				  const vector<int> & jets,
 				  const double HT);
   double GetFakeRate(double muopt, double eta, double jetpt);
-  bool filterHBHENoise();
   double GetJERScale(double eta);
   void PFJetSmearing();
   void PFJetSmearingCalculation();
+
+  Bool_t TriggerMatched(Int_t muonIterator, vector <TString> triggerFilters);
+  Bool_t dRMatched(Int_t muonIterator, Int_t triggerID);
+  Bool_t MuonCuts(Int_t i);
+  Bool_t JetCuts(Int_t i, vector <int> muons);
+  Bool_t ElectronCuts(Int_t i);
 
   // helper functions
   void CreateHistograms();

@@ -6,11 +6,12 @@
 
 #include <algorithm>
 #include <iostream>
+#include <string>
 #include <sstream>
 
 using namespace std;
 
-EventFilter::EventFilter(const char * eventFileName, bool verbose)
+EventFilter::EventFilter(string eventFileName, bool verbose)
 {
   minrun_  = -1;
   maxrun_  = -1;
@@ -35,12 +36,19 @@ EventFilter::~EventFilter()
 
 #define LENGTH 0x2000
 #define CHUNK 16384
-void EventFilter::readEventListFile(const char * eventFileName)
+void EventFilter::readEventListFile(string eventFileName)
 {
 #ifdef NO_GZCOMPRESS
   ERROR("NO_GZCOMPRESS -- gz* functions cannot compress");
 #else
-  gzFile file = gzopen(eventFileName, "r");
+  
+  // code does nothing when string is empty
+  if ( eventFileName.empty() ) {
+    return;
+  }
+
+
+  gzFile file = gzopen(eventFileName.c_str(), "r");
   if (!file) {
     WARNING("Unable to open event list file " << eventFileName);
     return;
@@ -121,7 +129,7 @@ void EventFilter::addEventString(const string & eventString)
     ls = atoi((eventString.substr(found+1,(found2-found-1))).c_str());  // convert to ls
     event = atoi((eventString.substr(found2+1)).c_str()); // convert to event
     /// Some event numbers are less than 0?  \JetHT\Run2012C-v1\RAW:201278:2145:-2130281065
-    if (ls==0 || event==0)
+    if (ls==0 || event==0 || event<0)
       WARNING("Strange lumi, event numbers for input '" << eventString << "'");
   }
   else {
@@ -146,7 +154,7 @@ void EventFilter::addEventString(const string & eventString)
 }
 
 
-bool EventFilter::filter(int run, int lumisection, int event)
+bool EventFilter::filter(int run, unsigned int lumisection, unsigned int event)
 {
   // if run is outside filter range, then always return true
   if (minrun_ > -1 && run < minrun_) 
