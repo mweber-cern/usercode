@@ -588,7 +588,7 @@ void tightlooseplots(int start, int end)
 	plot("nTL_met");
 	logy();
 	min(0.1);
-	arrow(50.);
+	//arrow(50.);
 	legend(1e-3);
 	pprint();
 
@@ -597,7 +597,7 @@ void tightlooseplots(int start, int end)
 	max(1e6);
 	min(0.1);
 	logy();
-	arrow(50.);
+	//arrow(50.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_1.pdf");
@@ -609,7 +609,7 @@ void tightlooseplots(int start, int end)
 	logy();
 	min(0.1);
 	max(1e6);
-	arrow(15.);
+	//arrow(15.);
 	legend(1e-3);
 	pprint();
 
@@ -619,7 +619,7 @@ void tightlooseplots(int start, int end)
 	min(0.1);
 	max(1e6);
 	zoom(0, 700);
-	arrow(40.);
+	//arrow(40.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_2.pdf");
@@ -630,7 +630,7 @@ void tightlooseplots(int start, int end)
 	liny();
 	plot("nTL_jetdphi");
 	min(0.1);
-	arrow(1.);
+	//arrow(1.);
 	legend(1e-3, 0);
 	pprint();
 
@@ -638,7 +638,7 @@ void tightlooseplots(int start, int end)
 	plot("nTL_mt");
 	zoom(0, 100);
 	liny();
-	arrow(40.);
+	//arrow(40.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_3.pdf");  
@@ -648,8 +648,8 @@ void tightlooseplots(int start, int end)
 	cd(1);
 	liny();
 	plot("nTL_zmass");
-	arrow(71.);
-	arrow(111.);
+	//arrow(71.);
+	//arrow(111.);
 	zoom(0, 200);
 	min(0.1);
 	legend(1e-3);
@@ -659,8 +659,8 @@ void tightlooseplots(int start, int end)
 	plot("nTL_nloose");
 	min(0.1);
 	logy();
-	arrow(0.5);
-	arrow(1.5);
+	//arrow(0.5);
+	//arrow(1.5);
 	legend(1e-3);
 	pprint();
 	print("tightloose_4.pdf");  

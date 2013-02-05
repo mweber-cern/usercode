@@ -569,7 +569,8 @@ void compute_energy_resolution_offset()
 {
   plot("JER_deltae");
   TH1D * back = backgroundHisto();
-  TF1 * f1 = new TF1("f1", "[0]*TMath::BreitWigner(x,[1],[2])", -50, 50);
+//   TF1 * f1 = new TF1("f1", "[0]*TMath::BreitWigner(x,[1],[2])", -50, 50);
+  TF1 * f1 = new TF1("f1", "gaus", -50, 50);
   f1->SetParameter(0, back->Integral());
   f1->SetParameter(1, back->GetMean());
   f1->SetParameter(2, back->GetRMS());

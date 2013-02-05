@@ -237,6 +237,7 @@ void delete_old_config()
   DEBUG("delete_old_config() end");
 }
 
+
 // read all config files
 void read_config_files(const char * configFileName = "plot.cfg")
 {
@@ -303,19 +304,20 @@ void read_config_files(const char * configFileName = "plot.cfg")
 
   // get number of background MCs
   Int_t N_bg = backgrounds.size();
-  if (N_bg < 0) {
-    ERROR("Number of backgrounds found in config file is < 0");
+  if (N_bg < 1) {
+    ERROR("Number of backgrounds found in config file is < 1");
     return;
   }
   INFO("Number of backgrounds: " << N_bg);
 
   // get number of signal MCs
   gMaxSignal = signals.size();
-  if (gMaxSignal < 0) {
-    ERROR("Number of signals N_sg found in config file < 0");
-    return;
+  if (gMaxSignal < 1) {
+    WARNING("Number of signals found in config file is < 1");
   }
-  INFO("Number of signals: " << gMaxSignal);
+  else {
+    INFO("Number of signals: " << gMaxSignal);
+  }
 
   // create and initialize period depending arrays
   gPeriod = new char * [gMaxPeriod];
@@ -387,8 +389,8 @@ void read_config_files(const char * configFileName = "plot.cfg")
     }
   }
   // data
-  gProcess[gMaxProcess-1].fname     = strdup_new("data");
-  gProcess[gMaxProcess-1].tname     = strdup_new(gConfig->GetValue("data.label", "Data"));
+  gProcess[gMaxProcess-1].fname     = strdup_new("data_doublemu");
+  gProcess[gMaxProcess-1].tname     = strdup_new(gConfig->GetValue("data_doublemu.label", "Data"));
   gProcess[gMaxProcess-1].fcolor    = kWhite;
   gProcess[gMaxProcess-1].lcolor    = kWhite;
   gProcess[gMaxProcess-1].hcolor    = kWhite;
@@ -431,12 +433,13 @@ void read_config_files(const char * configFileName = "plot.cfg")
 	      << " for process " << gProcess[process].fname << " in file " << configFileName);
       }
     }
-    gLumi[period] = gConfig->GetValue(Form("data.%s.lumi", gPeriod[period]), gOptDefault);
+    gLumi[period] = gConfig->GetValue(Form("data_doublemu.%s.lumi", gPeriod[period]), gOptDefault);
     if (gLumi[period] == gOptDefault || gLumi[period] < 0) {
       ERROR("Bad lumi " << gLumi[period] << " from file " << configFileName);
     }
   }
 }
+
 
 // read configuration from file
 void read_config_file(const char * configFileName = "Overview.cfg")
@@ -469,7 +472,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   // get number of background MCs
   Int_t N_bg = gConfig->GetValue("N_bg", -1);
   if (N_bg < 0) {
-    ERROR("Number of backgrounds N_bg not found in config file or N_bg < 0");
+    ERROR("Number of backgrounds N_bg not found in config file or N_bg < 1");
     return;
   }
   INFO("Number of backgrounds: " << N_bg);
@@ -477,7 +480,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
   // get number of signal MCs
   gMaxSignal = gConfig->GetValue("N_sg", -1);
   if (gMaxSignal < 0) {
-    ERROR("Number of signals N_sg not found in config file or N_sg < 0");
+    ERROR("Number of signals N_sg not found in config file or N_sg < 1");
     return;
   }
   INFO("Number of signals: " << gMaxSignal);
@@ -825,8 +828,8 @@ void readcuts()
     // create new TOption object
     if (gCuts[period] != 0)
       delete gCuts[period];
-    INFO("Reading option file " << Form("%s/cuts.cfg", getpath(period)));
-    gCuts[period] = new TEnv(Form("%s/cuts.cfg", getpath(period)));
+    INFO("Reading option file " << Form("%s/../config/analyzer.cfg", getpath(period)));
+    gCuts[period] = new TEnv(Form("%s/../config/analyzer.cfg", getpath(period)));
   }
 }
 
@@ -1038,10 +1041,11 @@ Double_t GetOpt(Int_t period, const char * hname, const char * MinMax)
   }
   char optname[256];
   // get value
-  snprintf(optname, 256, "%s%s", hname+2, MinMax);
+  snprintf(optname, 256, "%s_%s", hname+6, MinMax);
+  //INFO(hname+2);
   Double_t value = gCuts[gStart]->GetValue(optname, gOptDefault);
   if (value == gOptDefault) {
-    ERROR("Option " << optname << " not found, return default " << gOptDefault);
+    WARNING("Option " << optname << " not found, return default " << gOptDefault);
   }
   return value;
 }
@@ -1049,13 +1053,13 @@ Double_t GetOpt(Int_t period, const char * hname, const char * MinMax)
 Double_t GetOptMin(Int_t period, const char * hname)
 {
   // get minimum value from option file for period gPeriod[gStart]
-  return GetOpt(period, hname, "Min");
+  return GetOpt(period, hname, "min");
 }
 
 Double_t GetOptMax(Int_t period, const char * hname)
 {
   // get maximum value from option file for period gPeriod[gStart]
-  return GetOpt(period, hname, "Max");
+  return GetOpt(period, hname, "max");
 }
 
 TArrow * arrow(Double_t position, Int_t neighbourbins)
@@ -1087,6 +1091,7 @@ TArrow * arrow(Double_t position, Int_t neighbourbins)
     }
   }
   DEBUG("fbottom = " << fbottom);
+
   Double_t ftop;
   if (gPad->GetLogy() == 0) {
     fbottom += fmax * 0.1;
@@ -1098,7 +1103,7 @@ TArrow * arrow(Double_t position, Int_t neighbourbins)
 			  fmax);
   }
   DEBUG("ftop = " << ftop);
-  DEBUG("fbottom = " << fbottom);
+  //DEBUG("fbottom = " << fbottom);
   TArrow * a1 = new TArrow(position, ftop, position, fbottom);
   if (a1 == 0)
     return 0;
@@ -1129,7 +1134,7 @@ void drawcut()
   const char * t = gStack[gPadNr][hstart]->GetName();
   DEBUG("histo name: " << t);
   // only draw arrows for N-1 plots
-  if (t[1] != 'n')
+  if (t[5] != 'n')
     return;
   DEBUG("Getting values from options file");
   // get values from option file
