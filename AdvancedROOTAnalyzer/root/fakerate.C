@@ -159,7 +159,7 @@ void fix_2d_histo(TH2D * hTight2, TH2D * hLoose2)
   }  
 }
 
-TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
+TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
 {
   if (gStart != gEnd) {
     ERROR("tight_loose_ratio() can only be called for one period!");
@@ -473,7 +473,7 @@ TH1D * get_1d_ratio(TH3D * hTight3, TH3D * hLoose3)
 void tight_loose_ratioplot()
 {
   DEBUG("tight_loose_ratioplot() start");
-  MakeCanvas();
+  MakeCanvas(1,1);
 
   DEBUG("reading histograms");
   // "plot" histograms, i.e. read into memory
@@ -551,7 +551,7 @@ void tight_loose_ratioplot()
     DEBUG("Draw");
     if (first) {
       histo->SetMaximum(1.);
-      histo->SetMinimum(0.);
+      histo->SetMinimum(-0.1);
       histo->SetXTitle("p_{T}(#mu) [GeV]");
       histo->SetYTitle("T/L ratio");
       histo->Draw("ehisto");
@@ -571,11 +571,17 @@ void tight_loose_ratioplot()
   TH1D * hdata_subtracted = get_subtracted_tight_loose_ratio(false, false);
   if (hdata_subtracted == 0)
     return;
+  TLine * l = new TLine(15., 0, 70., 0);
+  l->SetLineStyle(kDotted);
+  l->SetLineColor(kBlack);
+  l->SetLineWidth(2);
+  l->Draw();
   hdata_subtracted->SetMarkerColor(kBlue);
   hdata_subtracted->SetMarkerStyle(8);
   hdata_subtracted->Draw("epsame");
   leg->AddEntry(hdata_subtracted, "data subtr.", "ep");
   leg->Draw();
+  gPad->Print("tlratio.pdf");
 }
 
 void tightlooseplots(int start, int end)
@@ -935,12 +941,5 @@ void fakerate_systematics(int istart = 0, int iend = 999)
     cout << sel[i].sel << ": " 
 	 << "N = " << 100.*N/N_ref << " +- " << 100*R/N_ref << "%" << endl;
   }
-}
-
-// when script is executed, run this command
-void fakerate(const char * sel)
-{
-  selection(sel);
-  get_subtracted_tight_loose_ratio();
 }
 

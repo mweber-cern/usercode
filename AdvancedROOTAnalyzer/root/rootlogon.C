@@ -1,6 +1,6 @@
 void setNiceColorPalette () {
     const Int_t NRGBs = 5;
-    const Int_t NCont = 255;
+    const Int_t NCont = 100;
 
     Double_t stops[NRGBs] = { 0.00, 0.34, 0.61, 0.84, 1.00 };
     Double_t red[NRGBs]   = { 0.00, 0.00, 0.87, 1.00, 0.51 };
@@ -8,16 +8,15 @@ void setNiceColorPalette () {
     Double_t blue[NRGBs]  = { 0.51, 1.00, 0.12, 0.00, 0.00 };
     TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, NCont);
     gStyle->SetNumberContours(NCont);
-    
-    printf("Using nice color palette \n");
 }
 
 void rootlogon () {
   printf("Loading rootlogon.C...\n");
 
   // corrections to ugly ROOT standard style
-  // gROOT->SetStyle("Plain");
+  gROOT->SetStyle("Plain");
   // gStyle->SetPalette(1);
+  setNiceColorPalette();
 
   // load and apply CMS TDR style for plots
   gROOT->LoadMacro(Form("%s/root/tdrstyle.C", getenv("ARASYS")));
@@ -30,11 +29,9 @@ void rootlogon () {
   gROOT->LoadMacro(Form("%s/root/fakerate.C+", getenv("ARASYS")));
   gROOT->LoadMacro(Form("%s/root/rpv.C+", getenv("ARASYS")));
   gROOT->LoadMacro(Form("%s/root/systematics.C+", getenv("ARASYS")));
-
-  setNiceColorPalette();
   
   // set up everything
-  setup("plot.cfg");
+  setup_dumpallplots("../config/plot.cfg");
 
   // if you want to debug what is happening, uncomment next line
   // gLogLevel = 100;
