@@ -21,6 +21,11 @@ mydict = eval("""
   { 
     "default" : "lastbin",
     "syst"  : ( "zero" )
+  },
+  "TL_njets_min" :
+  { 
+    "default" : "2.",
+    "syst" : ( "1." )
   }
 }
 """)

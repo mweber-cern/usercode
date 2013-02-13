@@ -47,7 +47,6 @@ def submit_condor_job(executable, arguments, inbox, outbox, jobname):
     return rc
 
 def submit_condor_with_wrapper(executable, arguments, inbox, outbox, jobname):
-    scriptdir = os.environ['ARASYS'] + '/bin'
 #    job_starter_file = open(scriptdir + "/job_starter_template.sh")
 #    job_starter = job_starter_file.read()
 #    repMap = {}
@@ -57,7 +56,8 @@ def submit_condor_with_wrapper(executable, arguments, inbox, outbox, jobname):
 #    exefile.write(content)
 #    exefile.close()
 #    os.system("chmod 755 " + job_starter_file)
-    job_starter_filename = scriptdir + "/job_starter.sh";
+    basedir = ara.config.get('Analysis', 'basedir').rstrip('/')
+    job_starter_filename = basedir + '/' + options.selection + '/bin/job_starter.sh'
     submit_condor_job(job_starter_filename, 
                       " ".join((executable, arguments)), 
                       inbox, outbox, jobname)
@@ -137,6 +137,12 @@ def setupInbox():
     # copy executable in place
     src = os.environ['ARASYS'] + '/analyzer/analyzer'
     dest = myDir + '/analyzer'
+    shutil.copy(src, dest)
+    inbox.append(dest)
+
+    # copy job starter in place
+    src = os.environ['ARASYS'] + '/bin/job_starter.sh'
+    dest = myDir + '/job_starter.sh'
     shutil.copy(src, dest)
     inbox.append(dest)
 
