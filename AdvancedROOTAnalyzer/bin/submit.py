@@ -42,7 +42,7 @@ def submit_condor_job(executable, arguments, inbox, outbox, jobname):
     jobfile = open(cfgFile, "w")
     jobfile.write(content)
     jobfile.close()
-    ara.wait_for_jobs(options.njobs)
+    ara.wait_for_jobs(ara.get_maximum_jobs(options.njobs))
     rc = ara.getCommandOutput2("condor_submit " + cfgFile)
     return rc
 

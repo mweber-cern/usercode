@@ -73,6 +73,9 @@ configuration files and submits and collects the jobs."""
         print "Starting systematics", syst, "replacing", mydict[syst]["default"], "with", mydict[syst]["syst"]
 
         repMap = { }
+        # Switch off writing tree contents to file, not necessary for systematics,
+        # just taking too much disk space
+        repMap["FillTree: true"] = "FillTree: false"
         search = syst+': '+mydict[syst]["default"]
         if isinstance(mydict[syst]["syst"], tuple):
             for value in mydict[syst]["syst"]:

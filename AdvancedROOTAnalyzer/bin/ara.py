@@ -215,7 +215,7 @@ def get_maximum_jobs(njobs):
 not to overload the network"""
     ltime = time.localtime()
     if ltime.tm_hour > 9 and ltime.tm_hour < 20 and ltime.tm_wday < 5:
-        return njobs
+        return 5
     else:
         return njobs
 
