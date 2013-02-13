@@ -31,7 +31,7 @@ void rootlogon () {
   gROOT->LoadMacro(Form("%s/root/systematics.C+", getenv("ARASYS")));
   
   // set up everything
-  setup_dumpallplots("../config/plot.cfg");
+  setup("plot.cfg");
 
   // if you want to debug what is happening, uncomment next line
   // gLogLevel = 100;
