@@ -303,6 +303,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
     hLoose2->SetTitleOffset(1.5, "X");
     hLoose2->SetTitleOffset(1.5, "Y");
     hLoose2->SetTitleOffset(2.5, "Z");
+    hLoose2->SetContour(99);
     hLoose2->Draw("lego2");
     cd(4); 
     setopt(hTight2);
@@ -312,6 +313,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
     hTight2->SetTitleOffset(1.5, "X");
     hTight2->SetTitleOffset(1.5, "Y");
     hTight2->SetTitleOffset(2.5, "Z");
+    hTight2->SetContour(99);
     hTight2->Draw("lego2");
   }
 
@@ -361,6 +363,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
     hRatio2->SetTitleOffset(1.5, "X");
     hRatio2->SetTitleOffset(1.5, "Y");
     hRatio2->SetTitleOffset(2.5, "Z");
+    hRatio2->SetContour(99);
     hRatio2->Draw("lego2");
     hRatio2->SetMaximum(1.0);
 
@@ -594,6 +597,7 @@ void tightlooseplots(int start, int end)
 	plot("nTL_met");
 	logy();
 	min(0.1);
+	max(1e7);
 	//arrow(50.);
 	legend(1e-3);
 	pprint();
@@ -623,7 +627,7 @@ void tightlooseplots(int start, int end)
 	plot("nTL_jetpt");
 	logy();
 	min(0.1);
-	max(1e6);
+	max(1e7);
 	zoom(0, 700);
 	//arrow(40.);
 	legend(1e-3);
@@ -829,12 +833,14 @@ TH2D * get_fakes_2d(const char * hname)
 TH1D * fake_estimate_1d(const char * sel, const char * hname)
 {
   MakeCanvas();
+
   selection(Form("%s_singlefake", sel));
   cd(1);
   TH1D * h_sf = get_fakes_1d(hname);
   double N_sf, R_sf;
   N_sf = h_sf->IntegralAndError(1, h_sf->GetNbinsX(), R_sf);
   INFO("N_sf = " << N_sf << " +/- " << R_sf);
+
   selection(Form("%s_doublefake", sel));
   cd(2);
   TH1D * h_df = get_fakes_1d(hname);
