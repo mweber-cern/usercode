@@ -122,7 +122,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fTL_mupt_min = fCfgFile.GetValue("TL_mupt_min",  15.);
   fTL_jetdphi_min = fCfgFile.GetValue("TL_jetdphi_min",  1.0);
   fTL_mt_max = fCfgFile.GetValue("TL_mt_max",  40.);
-  fTL_njets_min = fCfgFile.GetValue("TL_njets_min", 1.);
+  fTL_njets_min = fCfgFile.GetValue("TL_njets_min", 2.);
 
   INFO("fTL_met_max: " << fTL_met_max);
   INFO("fTL_ht_min: " << fTL_ht_min);
@@ -1706,21 +1706,21 @@ void Analysis::CreateHistograms()
   CreateHisto("DeltaPhi", "#Delta#phi(#mu_{1}, gaugino)", 315, 0., 3.15);
   CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
-  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
+  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
   CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("CR1_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR2_m_mumu", "CR2 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR3_m_mumu", "CR3 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR4_m_mumu", "CR4 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR4_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
-  CreateHisto("CR4_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("CR4_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
+  CreateHisto("CR4_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
   CreateHisto("CR5_m_mumu", "CR5 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR5_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
-  CreateHisto("CR5_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("CR5_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
+  CreateHisto("CR5_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
   CreateHisto("CR6_m_mumu", "CR6 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR6_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
-  CreateHisto("CR6_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("CR6_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
+  CreateHisto("CR6_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
 
   const double binsb[] = { 0, 3.3, 100 };
   CreateHisto("isbtag", "isbtag:TCHE btag", 2, binsb, 2, 0, 2);
@@ -1733,8 +1733,8 @@ void Analysis::CreateHistograms()
 
   // after btag cut
   CreateHisto("btag_m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("btag_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
-  CreateHisto("btag_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("btag_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
+  CreateHisto("btag_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
   CreateHisto("btag_m_smu_chi", "m(#chi): m(#tilde{#mu})", 110, 0, 2200, 25, 0, 500);
   CreateHisto("btag_ht", "HT@GeV", 100, 0, 500);
   CreateHisto("btag_jjmm_m", "smuon mass m(#mu_{0},#mu_{1},jets)", nMax, bins, nMax, bins);
