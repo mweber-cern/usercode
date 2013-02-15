@@ -31,7 +31,7 @@ double lambda_prime_211(double log_mu, double log_mu0, double val0)
 
   double beta_qcd = 3*C_F; // running with only QCD corrections
   double beta_susy = -C_F; // running with only SUSY corrections
-  double beta_tot = beta_qcd+beta_susy; // running with both QCD and SUSY QCD corrections 
+  double beta_tot = beta_qcd+beta_susy; // running with both QCD and SUSY QCD corrections
 
   return val0/(1+alpha_s/(4*pi)*beta_tot*2*(log_mu-log_mu0));
   // next line is numerically unstable...
@@ -64,7 +64,7 @@ void running_lambda_prime_211()
   cout << "Value of lambda'_211 at GUT scale: " << y[nMax-1] << endl;
 }
 
-Bool_t read_xsfile(const char * fname, int nMax, 
+Bool_t read_xsfile(const char * fname, int nMax,
 		   int p1, int p2, double & lambda, double & sqrts,
 		   int & n, double m[], double xs_lo[], double xs_nlo[])
 {
@@ -80,14 +80,14 @@ Bool_t read_xsfile(const char * fname, int nMax,
   double LO_tot, NLO_tot;
   n = 0;
   while (fgets(buffer, 256, xsfile)) {
-    if (n >= nMax) { 
+    if (n >= nMax) {
       cerr << "File contains more entries than array (" << nMax << " - enlarge array" << endl;
       break;
     }
     if (buffer[0] == '#')
       continue;
     int i1, i2;
-    if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf", 
+    if (sscanf(buffer, "%d %d %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf",
 	       & i1, & i2,
 	       & sqrts,
 	       & mS, & Mlr, & lambda,
@@ -122,8 +122,8 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
   double m_max = 0;
   char quarks[6] = { 'd', 'u', 's', 'c', 'b', 't' };
   int p1, p2;
-  p1 = 1; p2 = 2; // ud 
-  if (!read_xsfile(fname, nMax, p1, p2, lambda, sqrts, n, m, xs_lo, xs_nlo)) { 
+  p1 = 1; p2 = 2; // ud
+  if (!read_xsfile(fname, nMax, p1, p2, lambda, sqrts, n, m, xs_lo, xs_nlo)) {
     cerr << "Could not read file " << fname << endl;
     return;
   }
@@ -131,7 +131,7 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
   for (int i = 0; i < n; i++) {
     xs_max = TMath::Max(TMath::Max(xs_max, xs_lo[i]), xs_nlo[i]);
     xs_min = TMath::Min(TMath::Min(xs_min, xs_lo[i]), xs_nlo[i]);
-  
+
     m_min = TMath::Min(m_min, m[i]);
     m_max = TMath::Max(m_max, m[i]);
   }
@@ -143,10 +143,10 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
   TH2F * hframe = new TH2F("hframe", "frame", 1, m_min, m_max, 1, xs_min, xs_max);
   setopt(hframe);
   hframe->SetXTitle("m(#bf{#tilde{#mu}^{#pm}}) [GeV]");
-  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}^{#pm}}) [pb]", 
+  hframe->SetYTitle(Form("#sigma(%c %c #rightarrow #bf{#tilde{#mu}^{#pm}}) [pb]",
 			 quarks[TMath::Abs(p1)-1], quarks[TMath::Abs(p2)-1]));
   hframe->Draw();
-  
+
   TGraph * gr_lo = new TGraph(n, m, xs_lo);
   // setopt(gr_lo);
   gr_lo->SetLineColor(kRed);
@@ -171,11 +171,11 @@ void xscurve(const char * fname = "scan_7TeV_ud_smuon.txt")
 /** Return linear interpolation between points (x0, val0) and (x1, val1) at given x */
 double interpolate_linear(double x0, double val0, double x1, double val1, double x)
 {
-  if (x0 > x1) 
+  if (x0 > x1)
     THROW("Integrity violation: x0 > x1");
-  if (x > x1 || x < x0) 
+  if (x > x1 || x < x0)
     THROW("Given x not in interval [x0,x1]");
-  
+
   double m = (val1-val0)/(x1-x0);
   return val0 + m * (x - x0);
 }
@@ -184,7 +184,7 @@ void xs_lm1()
 {
   double m_smuon = 185.162;
   double m_sneutrino = 167.315;
-  
+
   double xs_lo  = interpolate_linear(185.0, 1.112930, 190.0, 1.020013, m_smuon);
   double xs_nlo = interpolate_linear(185.0, 1.496843, 190.0, 1.374188, m_smuon);
 
@@ -266,7 +266,7 @@ void signalplot(Bool_t batchmode = kTRUE)
   rebin(5);
   // zoom(0,80);
   legend(0.01, -1);
-  cd(2); 
+  cd(2);
   plot("Sig_ptMu2");
   rebin(5);
   // zoom(0,80);
@@ -386,7 +386,7 @@ void generate_pileup_histogram()
 {
 
 // Distribution used for Fall2011 MC.
-  
+
   Double_t Fall2011[50] = {
     0.003388501,
     0.010357558,
@@ -455,7 +455,7 @@ void generate_pileup_histogram()
  * for various scaling parameters and choosing those with lowest chi2 value.
  */
 
-void compute_energy_resolution() 
+void compute_energy_resolution()
 {
   // get histograms from file
   MakeCanvas(2,2);
@@ -465,7 +465,7 @@ void compute_energy_resolution()
     cerr << "ERR: no data found" << endl;
     return;
   }
-  // Create empty result histogram, one bin for each factor 
+  // Create empty result histogram, one bin for each factor
   // take binning from existing data histogram
   TH1D * hResult = hData->ProjectionY("hResult", 1, 1);
   hResult->SetTitle("#chi^2");
@@ -527,27 +527,27 @@ void compute_energy_resolution()
     hResult->SetBinContent(biny, ChiSquare);
     // in order to be able to fit the histogram, one also needs bin errors
     hResult->SetBinError(biny, 1.);
-  }   
+  }
   cd(3);
   hResult->Draw("hist");
 
   // obtain minimum from fit
-  TF1 * f1 = new TF1("f1", "pol2", 
-		     hResult->GetBinLowEdge(1), 
+  TF1 * f1 = new TF1("f1", "pol2",
+		     hResult->GetBinLowEdge(1),
 		     hResult->GetBinLowEdge(hResult->GetNbinsX()+2));
   hResult->Fit(f1, "R0", "goff");
   f1->SetLineColor(kBlue);
   f1->SetLineWidth(2.);
   f1->Draw("same");
-  // double a = f1->GetParameter(0); 
+  // double a = f1->GetParameter(0);
   double b = f1->GetParameter(1);
   double c = f1->GetParameter(2);
   double minvalue = -b/(2*c);
   double sigma = 1./TMath::Sqrt(c);
-  INFO("minimum from fit: f = " << minvalue << " +/- " << sigma 
+  INFO("minimum from fit: f = " << minvalue << " +/- " << sigma
        << ", chi2 = " << f1->Eval(minvalue));
 
-  // get minimum of histogram, take the corresponding scale factor, 
+  // get minimum of histogram, take the corresponding scale factor,
   // and plot data and MC for optical comparison
   Int_t biny = hResult->GetMinimumBin();
   Double_t best_scale = hResult->GetBinLowEdge(biny)+hResult->GetBinWidth(biny)/2.;
@@ -565,11 +565,12 @@ void compute_energy_resolution()
 }
 
 // fit width of energy distribution
-void compute_energy_resolution_offset() 
+void compute_energy_resolution_offset()
 {
   plot("JER_deltae");
   TH1D * back = backgroundHisto();
-  TF1 * f1 = new TF1("f1", "[0]*TMath::BreitWigner(x,[1],[2])", -50, 50);
+//   TF1 * f1 = new TF1("f1", "[0]*TMath::BreitWigner(x,[1],[2])", -50, 50);
+  TF1 * f1 = new TF1("f1", "gaus", -50, 50);
   f1->SetParameter(0, back->Integral());
   f1->SetParameter(1, back->GetMean());
   f1->SetParameter(2, back->GetRMS());
@@ -587,7 +588,7 @@ void plotlinlog(const char * name)
   plot(name);
   liny();
   legend();
-  
+
   cd(2);
   plot(name);
   logy();
@@ -662,9 +663,9 @@ void limitplot(const char * fname = "XscLimitsAndErrorsRooStats.txt")
   while (fgets(buffer, 256, limitfile)) {
     if (buffer[0] == '#')
       continue;
-    if (sscanf(buffer, "%lf & %lf & %lf & %lf & %lf & %lf & %lf & %lf \\", 
+    if (sscanf(buffer, "%lf & %lf & %lf & %lf & %lf & %lf & %lf & %lf \\",
 	       & m0, & m12,
-	       & observed, & expected, 
+	       & observed, & expected,
 	       & onesigmaup, & onesigmadown,
 	       & twosigmaup, & twosigmadown
 	  ) != 8) {
@@ -684,7 +685,7 @@ void twoplots(const char * sel1, const char * sel2, const char * hname)
   plot(hname);
   selection(sel2);
   cd(2);
-  plot(hname);  
+  plot(hname);
 }
 
 void selectionplots()
@@ -697,13 +698,13 @@ void selectionplots()
   legend();
 }
 
-void controlplots(const char * sel) 
+void controlplots(const char * sel)
 {
   selection(sel);
   plot("pfmet");
   zoom(0,150);
   legend();
-  cd(2); 
+  cd(2);
   plot("CR1_m_mumu");
   zoom(0,200);
   legend();
@@ -713,13 +714,13 @@ void controlplots(const char * sel)
   zoom(0,200);
   legend();
   cd(2);
-  plot("CR3_m_mumu"); 
-  zoom(0,200); 
+  plot("CR3_m_mumu");
+  zoom(0,200);
   legend();
   print(Form("JER_%s_btag.pdf", sel));
 
   // final control region
-  cd(1); 
+  cd(1);
   plot("CR5_m_smuon");
   zoom(0,200);
   legend();
@@ -752,9 +753,9 @@ void get2dstatistics(const TH2D * h2, double values[6][2])
   for (int binx = 1; binx <= h2->GetNbinsX(); binx++) {
     for (int biny = 1; biny <= binx; biny++) {
       // cout << "binx = " << binx << ", biny = " << biny << endl;
-      cout << "x=" << setw(4) << h2->GetXaxis()->GetBinLowEdge(binx) 
+      cout << "x=" << setw(4) << h2->GetXaxis()->GetBinLowEdge(binx)
   	   << ".." << setw(4) << h2->GetXaxis()->GetBinUpEdge(binx) << ", ";
-      cout << "y=" << setw(4) << h2->GetYaxis()->GetBinLowEdge(biny) 
+      cout << "y=" << setw(4) << h2->GetYaxis()->GetBinLowEdge(biny)
   	   << ".." << setw(4) << h2->GetYaxis()->GetBinUpEdge(biny) << ", ";
       double n = h2->GetBinContent(binx, biny);
       double e = h2->GetBinError(binx, biny);
@@ -777,20 +778,46 @@ void paperplots(const char * sel)
 
   // T/L ratio selection
   tightlooseplots();
-  
-  // Fakes (signal region)
-  TH1D * h_smuon = fake_estimate_1d(sel, "btag_m_smuon");
-  cd(1); 
-  rebin(5); 
-  legend(); 
-  gPad->Print("singlefake.pdf"); 
-  cd(2); 
-  rebin(5); 
-  legend(); 
-  gPad->Print("doublefake.pdf");
 
-  // save fakes to a file
+  // T/L ratio plots
+  get_subtracted_tight_loose_ratio();
+  tight_loose_ratioplot();
+
+  // btag control region
+  cd(1);
+  plot("CR1_m_mumu");
+  zoom(0,300);
+  legend();
+  pprint();
+  cd(2);
+  plot("CR2_m_mumu");
+  zoom(0,300);
+  legend();
+  pprint();
+
+  // Fakes (signal region) m_smuon
+  TH1D * h_smuon = fake_estimate_1d(sel, "btag_m_smuon");
+  cd(1);
+  rebin(4);
+  legend();
+  gPad->Print("m_smuon_singlefake.pdf");
+  cd(2);
+  rebin(4);
+  legend();
+  gPad->Print("m_smuon_doublefake.pdf");
+
+  // Fakes (signal region) m_gaugino
   TH1D * h_gaugino = fake_estimate_1d(sel, "btag_m_gaugino");
+  cd(1);
+  rebin(4);
+  legend();
+  gPad->Print("m_gaugino_singlefake.pdf");
+  cd(2);
+  rebin(4);
+  legend();
+  gPad->Print("m_gaugino_doublefake.pdf");
+
+  // Save fakes to a file
   TFile * f = new TFile("fakes.root", "RECREATE");
   h_smuon->SetName("h1_6_jjmm_m");
   h_smuon->Write();
@@ -801,12 +828,12 @@ void paperplots(const char * sel)
 
   // Fakes (control region)
   fake_estimate_1d(sel, "CR6_m_smuon");
-  cd(1); 
-  rebin(5); 
-  legend(); 
-  gPad->Print("CR_singlefake.pdf"); 
-  cd(2); 
-  rebin(5); 
-  legend(); 
+  cd(1);
+  rebin(5);
+  legend();
+  gPad->Print("CR_singlefake.pdf");
+  cd(2);
+  rebin(5);
+  legend();
   gPad->Print("CR_doublefake.pdf");
 }

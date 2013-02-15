@@ -1,6 +1,7 @@
 void setNiceColorPalette () {
     const Int_t NRGBs = 5;
-    const Int_t NCont = 100;
+    const Int_t NCont = 999;
+
 
     Double_t stops[NRGBs] = { 0.00, 0.34, 0.61, 0.84, 1.00 };
     Double_t red[NRGBs]   = { 0.00, 0.00, 0.87, 1.00, 0.51 };
@@ -15,7 +16,6 @@ void rootlogon () {
 
   // corrections to ugly ROOT standard style
   gROOT->SetStyle("Plain");
-  // gStyle->SetPalette(1);
   setNiceColorPalette();
 
   // load and apply CMS TDR style for plots
@@ -31,7 +31,7 @@ void rootlogon () {
   gROOT->LoadMacro(Form("%s/root/systematics.C+", getenv("ARASYS")));
   
   // set up everything
-  setup_dumpallplots("../config/plot.cfg");
+  setup_dumpallplots("plot.cfg");
 
   // if you want to debug what is happening, uncomment next line
   // gLogLevel = 100;

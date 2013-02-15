@@ -30,7 +30,7 @@ int readprocs(const char * fname)
 {
   FILE * infile = fopen(fname, "r");
   if (infile == 0) {
-    ERROR("could not open file DoublePrompt_MC.txt");
+    ERROR("could not open file " << fname);
     return 0;
   }
   char buffer[256];
@@ -101,7 +101,8 @@ int readprocs(const char * fname)
       else {
 	procs[i][n].systfactor = 0.5;
       }
-      INFO(n << " -> " << procs[i][n].name << ": " << procs[i][n].N << " +/-" << procs[i][n].staterr << " (stat), syst: " << procs[i][n].systfactor);
+      INFO(n << " -> " << procs[i][n].name << ": " << procs[i][n].N << " +/- " 
+	   << procs[i][n].staterr << " (stat), syst: " << procs[i][n].systfactor);
       n++;
       if (n > nMax) {
 	ERROR("Maximum number of processes reached, increase nMax");

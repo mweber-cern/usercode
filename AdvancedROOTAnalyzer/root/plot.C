@@ -825,8 +825,8 @@ void readcuts()
     // create new TOption object
     if (gCuts[period] != 0)
       delete gCuts[period];
-    INFO("Reading option file " << Form("%s/cuts.cfg", getpath(period)));
-    gCuts[period] = new TEnv(Form("%s/cuts.cfg", getpath(period)));
+    INFO("Reading option file " << Form("%s/%s/config/analyzer.cfg", gBase, gSubDir));
+    gCuts[period] = new TEnv(Form("%s/%s/config/analyzer.cfg", gBase, gSubDir));
   }
 }
 
@@ -1038,10 +1038,10 @@ Double_t GetOpt(Int_t period, const char * hname, const char * MinMax)
   }
   char optname[256];
   // get value
-  snprintf(optname, 256, "%s%s", hname+2, MinMax);
+  snprintf(optname, 256, "%s_%s", hname+6, MinMax);
   Double_t value = gCuts[gStart]->GetValue(optname, gOptDefault);
   if (value == gOptDefault) {
-    ERROR("Option " << optname << " not found, return default " << gOptDefault);
+    INFO("Option " << optname << " not found, return default " << gOptDefault);
   }
   return value;
 }
@@ -1049,13 +1049,13 @@ Double_t GetOpt(Int_t period, const char * hname, const char * MinMax)
 Double_t GetOptMin(Int_t period, const char * hname)
 {
   // get minimum value from option file for period gPeriod[gStart]
-  return GetOpt(period, hname, "Min");
+  return GetOpt(period, hname, "min");
 }
 
 Double_t GetOptMax(Int_t period, const char * hname)
 {
   // get maximum value from option file for period gPeriod[gStart]
-  return GetOpt(period, hname, "Max");
+  return GetOpt(period, hname, "max");
 }
 
 TArrow * arrow(Double_t position, Int_t neighbourbins)
@@ -1087,6 +1087,7 @@ TArrow * arrow(Double_t position, Int_t neighbourbins)
     }
   }
   DEBUG("fbottom = " << fbottom);
+
   Double_t ftop;
   if (gPad->GetLogy() == 0) {
     fbottom += fmax * 0.1;
@@ -1129,7 +1130,7 @@ void drawcut()
   const char * t = gStack[gPadNr][hstart]->GetName();
   DEBUG("histo name: " << t);
   // only draw arrows for N-1 plots
-  if (t[1] != 'n')
+  if (t[5] != 'n')
     return;
   DEBUG("Getting values from options file");
   // get values from option file

@@ -159,7 +159,7 @@ void fix_2d_histo(TH2D * hTight2, TH2D * hLoose2)
   }  
 }
 
-TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
+TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
 {
   if (gStart != gEnd) {
     ERROR("tight_loose_ratio() can only be called for one period!");
@@ -303,6 +303,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
     hLoose2->SetTitleOffset(1.5, "X");
     hLoose2->SetTitleOffset(1.5, "Y");
     hLoose2->SetTitleOffset(2.5, "Z");
+    hLoose2->SetContour(99);
     hLoose2->Draw("lego2");
     cd(4); 
     setopt(hTight2);
@@ -312,6 +313,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
     hTight2->SetTitleOffset(1.5, "X");
     hTight2->SetTitleOffset(1.5, "Y");
     hTight2->SetTitleOffset(2.5, "Z");
+    hTight2->SetContour(99);
     hTight2->Draw("lego2");
   }
 
@@ -361,6 +363,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save=true, bool draw=true)
     hRatio2->SetTitleOffset(1.5, "X");
     hRatio2->SetTitleOffset(1.5, "Y");
     hRatio2->SetTitleOffset(2.5, "Z");
+    hRatio2->SetContour(99);
     hRatio2->Draw("lego2");
     hRatio2->SetMaximum(1.0);
 
@@ -473,7 +476,7 @@ TH1D * get_1d_ratio(TH3D * hTight3, TH3D * hLoose3)
 void tight_loose_ratioplot()
 {
   DEBUG("tight_loose_ratioplot() start");
-  MakeCanvas();
+  MakeCanvas(1,1);
 
   DEBUG("reading histograms");
   // "plot" histograms, i.e. read into memory
@@ -551,7 +554,7 @@ void tight_loose_ratioplot()
     DEBUG("Draw");
     if (first) {
       histo->SetMaximum(1.);
-      histo->SetMinimum(0.);
+      histo->SetMinimum(-0.1);
       histo->SetXTitle("p_{T}(#mu) [GeV]");
       histo->SetYTitle("T/L ratio");
       histo->Draw("ehisto");
@@ -571,11 +574,17 @@ void tight_loose_ratioplot()
   TH1D * hdata_subtracted = get_subtracted_tight_loose_ratio(false, false);
   if (hdata_subtracted == 0)
     return;
+  TLine * l = new TLine(15., 0, 70., 0);
+  l->SetLineStyle(kDotted);
+  l->SetLineColor(kBlack);
+  l->SetLineWidth(2);
+  l->Draw();
   hdata_subtracted->SetMarkerColor(kBlue);
   hdata_subtracted->SetMarkerStyle(8);
   hdata_subtracted->Draw("epsame");
   leg->AddEntry(hdata_subtracted, "data subtr.", "ep");
   leg->Draw();
+  gPad->Print("tlratio.pdf");
 }
 
 void tightlooseplots(int start, int end)
@@ -588,7 +597,8 @@ void tightlooseplots(int start, int end)
 	plot("nTL_met");
 	logy();
 	min(0.1);
-	arrow(50.);
+	max(1e7);
+	//arrow(50.);
 	legend(1e-3);
 	pprint();
 
@@ -597,7 +607,7 @@ void tightlooseplots(int start, int end)
 	max(1e6);
 	min(0.1);
 	logy();
-	arrow(50.);
+	//arrow(50.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_1.pdf");
@@ -609,7 +619,7 @@ void tightlooseplots(int start, int end)
 	logy();
 	min(0.1);
 	max(1e6);
-	arrow(15.);
+	//arrow(15.);
 	legend(1e-3);
 	pprint();
 
@@ -617,9 +627,9 @@ void tightlooseplots(int start, int end)
 	plot("nTL_jetpt");
 	logy();
 	min(0.1);
-	max(1e6);
+	max(1e7);
 	zoom(0, 700);
-	arrow(40.);
+	//arrow(40.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_2.pdf");
@@ -630,7 +640,7 @@ void tightlooseplots(int start, int end)
 	liny();
 	plot("nTL_jetdphi");
 	min(0.1);
-	arrow(1.);
+	//arrow(1.);
 	legend(1e-3, 0);
 	pprint();
 
@@ -638,7 +648,7 @@ void tightlooseplots(int start, int end)
 	plot("nTL_mt");
 	zoom(0, 100);
 	liny();
-	arrow(40.);
+	//arrow(40.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_3.pdf");  
@@ -648,8 +658,8 @@ void tightlooseplots(int start, int end)
 	cd(1);
 	liny();
 	plot("nTL_zmass");
-	arrow(71.);
-	arrow(111.);
+	//arrow(71.);
+	//arrow(111.);
 	zoom(0, 200);
 	min(0.1);
 	legend(1e-3);
@@ -659,8 +669,8 @@ void tightlooseplots(int start, int end)
 	plot("nTL_nloose");
 	min(0.1);
 	logy();
-	arrow(0.5);
-	arrow(1.5);
+	//arrow(0.5);
+	//arrow(1.5);
 	legend(1e-3);
 	pprint();
 	print("tightloose_4.pdf");  
@@ -823,12 +833,14 @@ TH2D * get_fakes_2d(const char * hname)
 TH1D * fake_estimate_1d(const char * sel, const char * hname)
 {
   MakeCanvas();
+
   selection(Form("%s_singlefake", sel));
   cd(1);
   TH1D * h_sf = get_fakes_1d(hname);
   double N_sf, R_sf;
   N_sf = h_sf->IntegralAndError(1, h_sf->GetNbinsX(), R_sf);
   INFO("N_sf = " << N_sf << " +/- " << R_sf);
+
   selection(Form("%s_doublefake", sel));
   cd(2);
   TH1D * h_df = get_fakes_1d(hname);
@@ -935,12 +947,5 @@ void fakerate_systematics(int istart = 0, int iend = 999)
     cout << sel[i].sel << ": " 
 	 << "N = " << 100.*N/N_ref << " +- " << 100*R/N_ref << "%" << endl;
   }
-}
-
-// when script is executed, run this command
-void fakerate(const char * sel)
-{
-  selection(sel);
-  get_subtracted_tight_loose_ratio();
 }
 
