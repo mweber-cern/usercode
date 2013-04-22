@@ -113,9 +113,11 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fTL_jetpt_min = fCfgFile.GetValue("TL_jetpt_min",  40.);
   fTL_nloose_min = fCfgFile.GetValue("TL_nloose_min",  0.5);
   fTL_nloose_max = fCfgFile.GetValue("TL_nloose_max",  1.5);
+  fTL_mumudz_min = fCfgFile.GetValue("TL_mumudz_min",  0.01);
   fTL_zmass_min = fCfgFile.GetValue("TL_zmass_min",  71.);
   fTL_zmass_max = fCfgFile.GetValue("TL_zmass_max",  111.);
   fTL_mupt_min = fCfgFile.GetValue("TL_mupt_min",  15.);
+  fTL_firstmupt_min = fCfgFile.GetValue("TL_firstmupt_min",  20.);
   fTL_jetdphi_min = fCfgFile.GetValue("TL_jetdphi_min",  1.0);
   fTL_mumudphi_max = fCfgFile.GetValue("TL_mumudphi_max",  1.0);
   fTL_mt_max = fCfgFile.GetValue("TL_mt_max",  40.);
@@ -126,9 +128,11 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   INFO("fTL_jetpt_min: " << fTL_jetpt_min);
   INFO("fTL_nloose_min: " << fTL_nloose_min);
   INFO("fTL_nloose_max: " << fTL_nloose_max);
+  INFO("fTL_mumudz_min: " << fTL_mumudz_min);
   INFO("fTL_zmass_min: " << fTL_zmass_min);
   INFO("fTL_zmass_max: " << fTL_zmass_max);
   INFO("fTL_mupt_min: " << fTL_mupt_min);
+  INFO("fTL_firstmupt_min: " << fTL_firstmupt_min);
   INFO("fTL_jetdphi_min: " << fTL_jetdphi_min);
   INFO("fTL_mumudphi_max: " << fTL_mumudphi_max);
   INFO("fTL_mt_max: " << fTL_mt_max);
@@ -811,8 +815,7 @@ void Analysis::SignalStudy(int & charge)
 }
 
 void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
-					  const vector<int> & tight_muons,
-					  const vector<int> & muons,
+					  const vector<int> & tight_muons,					  
 					  const vector<int> & jets,
 					  const double HT)
 {
@@ -846,6 +849,8 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
 
   double ST = HT;
   for (Int_t i = 0; i < nMuonsLoose; i++) {
+    // trigger specific muon cut
+    QCDCuts.Set("nTL_firstmupt", fTL_firstmupt_min <= muo_pt[0] , muo_pt[0]);
     // muon dependent requirements to get more QCD like events
     Fill("TL_metdphi", DeltaPhi(met_phi[MET_INDEX], muo_phi[loose_muons[i]]));
     double dphi = 0.;
@@ -857,7 +862,8 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
 		       muo_pz[loose_muons[i]], muo_E[loose_muons[i]]);
     ST += muo_pt[loose_muons[i]];
     // find another (very very) loose muon and construct "Z mass" hypothesis
-    double zmass = 0;
+    double mindz = 1000;
+    double zmass = 0.;
     for (Int_t j = 0; j < muo_n; j++) {
       // skip the same muon
       if (j == loose_muons[i])
@@ -867,8 +873,15 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
       Fill("TL_zmass", m);
       // find mass closest to Z mass
       zmass = 91.+TMath::Sign(1., m-91.)*TMath::Min(fabs(91.-zmass), fabs(91.-m));
+
+
+     
+      Fill("TL_mumudz", fabs( muo_dzTk[j] - muo_dzTk[loose_muons[i]] ));
+      mindz = TMath::Min( mindz, fabs(muo_dzTk[j] - muo_dzTk[loose_muons[i]]) );
     }
     QCDCuts.Set("nTL_zmass", zmass > fTL_zmass_min && fTL_zmass_max > zmass, zmass);
+    QCDCuts.Set("nTL_mumudz", mindz > fTL_mumudz_min, mindz);
+
     // compute transverse mass of MET and mu (W hypothesis)
     double cos_phi12 = TMath::Cos(DeltaPhi(met_phi[MET_INDEX], mu0.Phi()));
     double MT = TMath::Sqrt(2*met_et[MET_INDEX]*mu0.Pt()*(1.-cos_phi12));
@@ -1059,13 +1072,6 @@ void Analysis::Loop()
     // pileup reweighting
     if (fPileupReweighting && (fInputType == "mc" || fInputType == "signal"
 			       || fInputType == "background")) {
-      if (pu_num_int[0] < 0 || pu_num_int[1] < 0 || pu_num_int[2] < 0
-	  || pu_num_int[0] > 100 || pu_num_int[1] > 100 || pu_num_int[2] > 100) {
-	WARNING("Strange pileup configuration: pu_num_int[0] = " << pu_num_int[0]
-		<< " pu_num_int[1] = " << pu_num_int[1]
-		<< " pu_num_int[2] = " << pu_num_int[2] << ", skipping event");
-	continue;
-      }
       double weight = LumiWeights_.weight(pu_TrueNrInter);
       // if (weight != 0)
       global_weight *= weight;
@@ -1137,7 +1143,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // PF jet smearing
-    // PFJetSmearing();
+    PFJetSmearing();
 
     //////////////////////////////////////////////////////////////////////
     // Object ID
@@ -1215,8 +1221,8 @@ void Analysis::Loop()
       // unique triggerfilters to match to
       muonTriggerFilters.push_back("hltDiMuonGlb17Glb8DzFiltered0p2"); // HLT_Mu17_Mu8_v
       muonTriggerFilters.push_back("hltDiMuonGlb17Trk8DzFiltered0p2"); // HLT_Mu17_TkMu8_v      
-      muonTriggerFilters.push_back("hltDiMuonGlb22Trk8DzFiltered0p2"); // HLT_Mu22_TkMu8_v
-      muonTriggerFilters.push_back("hltDiMuonGlb22Trk22DzFiltered0p2"); // HLT_Mu22_TkMu22_v
+      //muonTriggerFilters.push_back("hltDiMuonGlb22Trk8DzFiltered0p2"); // HLT_Mu22_TkMu8_v
+      //muonTriggerFilters.push_back("hltDiMuonGlb22Trk22DzFiltered0p2"); // HLT_Mu22_TkMu22_v
       
       //Fill("nMuon_matched", matched);
       if ( !TriggerMatched(i, muonTriggerFilters) )
@@ -1243,7 +1249,8 @@ void Analysis::Loop()
 	}
       }
       Fill("MJ_rmin", Rmin);
-      if (jet_min > 0 && Rmin < fLooseMuonRelIso) {
+      if (jet_min > 0 && Rmin < 0.5) {
+	Fill("relIsoInJet", relIso);
 	Fill("MJ_EF", muo_E[m]/pfjet_E[jets[jet_min]]);
 	Fill("MJ_EE", muo_E[m], pfjet_E[jets[jet_min]]);
 	// use MC to help if there is a signal particle close
@@ -1258,7 +1265,9 @@ void Analysis::Loop()
 	  Fill("MJ_jet_dR", min_jet_dR);
 	  Fill("MJ_dR", min_mu_dR, min_jet_dR);
 	}
-	continue;
+	//continue;
+      } else {
+	Fill("relIsoOutJet", relIso);
       }
 
       Fill("nMuon_relIso", relIso);
@@ -1275,6 +1284,18 @@ void Analysis::Loop()
     Int_t nMuonsTight = tight_muons.size();
 
 
+    // TEST VTX_N
+    Double_t vtx_mindz = 1000.;
+    //Double_t vtx_2ndmindz = 1000.;
+    for (int i = 0; i < vtx_n; i++) {
+      for (int j = 0; j < vtx_n; j++) {
+	if( i != j) {
+	  vtx_mindz = min( vtx_mindz, fabs(vtx_z[i]-vtx_z[j]));
+	}
+      }
+    }
+    Fill("delta_vtx_z", vtx_mindz);
+    
 
     // Photons
     // https://twiki.cern.ch/twiki/bin/viewauth/CMS/Vgamma2011PhotonID
@@ -1313,6 +1334,7 @@ void Analysis::Loop()
 
     for (Int_t i = 0; i < eventfilter_n; i++) {
       TString filterName = eventfilter_names->at(i);
+      // ignoring the following filters
       if ( filterName.Contains("scrapingFilter")       ||
 	   filterName.Contains("ECALDeadCellFilterBE") ||
 	   filterName.Contains("MuonFailureFilter") ) {
@@ -1322,6 +1344,7 @@ void Analysis::Loop()
       EventFilterList.Set(eventfilter_names->at(i), eventfilter_results[i], eventfilter_results[i]);
     }
     EventFilterList.FillHistograms();
+    
     if ( nVertex < 1 || nElectron > 0 || !EventFilterList.PassesAll() ) continue;
 
     Fill("cutflow", "cleaning");
@@ -1329,7 +1352,7 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // fake rate study: tight-to-loose ratio calculation
-    TightLooseRatioCalculation(loose_muons, tight_muons, muons, jets, HT);
+    TightLooseRatioCalculation(loose_muons, tight_muons, jets, HT);
 
     //////////////////////////////////////////////////////////////////////
     // loose muon id
@@ -1457,6 +1480,7 @@ void Analysis::Loop()
     Fill("Muon_pt0", muo_pt[fMuoId[0]]);
     Fill("Muon_pt1", muo_pt[fMuoId[1]]);
     Fill("Muon_pt", muo_pt[fMuoId[0]], muo_pt[fMuoId[1]]);
+    Fill("mumudz", fabs(muo_dzTk[fMuoId[0]]-muo_dzTk[fMuoId[1]]));
     if (muo_pt[fMuoId[0]] <= 20. ||
 	muo_pt[fMuoId[1]] <= 15. ||
 	muon_dR[0] < 0.4 ||
@@ -1563,8 +1587,8 @@ void Analysis::Loop()
     DEBUG("cutflow " << "#Delta#phi");
 
     // fill some histograms
-    Fill("m_mumu_cut", m_mumu);
-    Fill("muo_n_cut", muo_n);
+    Fill("m_mumu_precut", m_mumu);
+    Fill("muo_n_precut", muo_n);
     Fill("vtx_n", vtx_n);
     Fill("ht", HT);
     for (int i = 0; i < vtx_n; i++) {
@@ -1574,6 +1598,24 @@ void Analysis::Loop()
       Fill("vtx_y", vtx_y[i]);
       Fill("vtx_z", vtx_z[i]);
     }
+
+    Fill("m_gaugino_precut", GauginoMass);
+    Fill("m_smuon_precut", SmuonMass);
+
+    // b-tag veto
+    if (fIsBTagged) {
+      continue;
+    }
+    Fill("cutflow", "btag veto");
+    DEBUG("cutflow " << "btag veto");
+
+    Fill("btag_m_mumu", m_mumu);
+    Fill("btag_m_gaugino", GauginoMass);
+    Fill("btag_m_smuon", SmuonMass);
+    Fill("btag_jjmm_m", SmuonMass, GauginoMass);
+    Fill("btag_m_smu_chi", SmuonMass, GauginoMass);     
+
+    Fill("last_mumudz", fabs(muo_dzTk[fMuoId[0]]-muo_dzTk[fMuoId[1]]));
 
     // muon charge
     Fill("Muon_charge", muo_charge[fMuoId[0]], muo_charge[fMuoId[1]]);
@@ -1590,19 +1632,6 @@ void Analysis::Loop()
     Fill("jjmm_m", SmuonMass, GauginoMass); // final binning
     Fill("muo_n", muo_n);
     Fill("m_smu_chi", SmuonMass, GauginoMass);
-
-    // b-tag veto
-    if (fIsBTagged) {
-      continue;
-    }
-    Fill("cutflow", "btag veto");
-    DEBUG("cutflow " << "btag veto");
-
-    Fill("btag_m_mumu", m_mumu);
-    Fill("btag_m_gaugino", GauginoMass);
-    Fill("btag_m_smuon", SmuonMass);
-    Fill("btag_jjmm_m", SmuonMass, GauginoMass);
-    Fill("btag_m_smu_chi", SmuonMass, GauginoMass);
 
     FillNoWeight("log_weight", TMath::Log(global_weight)/TMath::Log(10.));
 
@@ -1667,8 +1696,8 @@ void Analysis::CreateHistograms()
 
   // cut flow - nasty workaround due to ROOTs problems with histograms filled with strings
   histo["cutflow"] = get_cutflow_histogram();
-  const Int_t firstrun = 160404;
-  const Int_t lastrun  = 180252;
+  const Int_t firstrun = 190000;
+  const Int_t lastrun  = 220000;
   CreateHisto("runnumber", "Run number", lastrun-firstrun+1, firstrun, lastrun+1);
 
   // signal histograms
@@ -1758,6 +1787,10 @@ void Analysis::CreateHistograms()
   CreateHisto("nObj_vtx_z", "Z position of vertex@cm", 120, -30, 30);
   CreateHisto("nObj_vtx_bs", "|r_{bs} - r_{vtx}|@cm", 100, 0, 10);
 
+  CreateHisto("delta_vtx_z", "z distance of vtx" , 10000, 0., 1.);
+  CreateHisto("mumudz", "#Delta dz between 2 muons", 10000, 0, 1.);
+  CreateHisto("last_mumudz", "#Delta dz between 2 muons", 10000, 0, 1.);
+
   // Object selection: electron
   CreateHisto("nElectron", "number of electrons", 10, 0, 10);
   CreateHisto("nElectron_pt", "Electron p_{T}@GeV", 1000, 0, 1000);
@@ -1796,6 +1829,8 @@ void Analysis::CreateHistograms()
   CreateHisto("Muon_loosetight", "number of tight muons:number of loose muons", 5, -0.5, 4.5, 5, -0.5, 4.5);
   // Object selection: tight/loose muons
   CreateHisto("nMuon_relIso", "muon relative isolation", 200, 0, 10);
+  CreateHisto("relIsoOutJet", "muon relative isolation outside of jet", 200, 0, 10);
+  CreateHisto("relIsoInJet", "muon relative isolation inside of jet", 200, 0, 10);
   CreateHisto("nMuon_matched", "muon trigger matching", 10, -0.5, 9.5);
 
   // Object selection: jets
@@ -1852,17 +1887,19 @@ void Analysis::CreateHistograms()
 
   // Tight-to-loose ratio
   CreateHisto("TightMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV",
-	      11, 15, 100, 5, 0, 2.5, 6, 40, 100);
+	      9, 10, 100, 5, 0, 2.5, 6, 40, 100);
   CreateHisto("LooseMuons", "pt_{#mu} @GeV:#eta_{#mu}:Leading jet pt@GeV",
-	      11, 15, 100, 5, 0, 2.5, 6, 40, 100);
+	      9, 10, 100, 5, 0, 2.5, 6, 40, 100);
 
   CreateHisto("nTL_met", "MET@GeV", 100, 0, 500);
   CreateHisto("nTL_jetpt", "leading jet pt@GeV", 150, 0, 1500);
   CreateHisto("nTL_ht", "event HT@GeV", 150, 0, 1500);
   CreateHisto("nTL_nloose", "number of loose muons", 5, -0.5, 4.5);
+  CreateHisto("nTL_firstmupt", "muon p_{T}@GeV", 100, 0, 100.);
   CreateHisto("nTL_mupt", "muon p_{T}@GeV", 100, 0, 100.);
   CreateHisto("nTL_jetdphi", "#Delta#phi between leading jet and loose muon", 315, 0, 3.15);
   CreateHisto("nTL_mt", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
+  CreateHisto("nTL_mumudz", "#Delta dz between 2 muons", 1000, 0, 1.);
   CreateHisto("nTL_zmass", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
   CreateHisto("nTL_njets", "number of jets", 10, -0.5, 9.5);
 
@@ -1870,10 +1907,12 @@ void Analysis::CreateHistograms()
   CreateHisto("TL_metsig", "MET significance", 100, 0, 50);
   CreateHisto("TL_metdphi", "#Delta#phi between MET and loose muon", 315, 0, 3.15);
   CreateHisto("TL_jetpt", "leading jet pt@GeV", 150, 0, 1500);
+  CreateHisto("TL_firstmupt", "leading muon pt@GeV", 100, 0, 100);
   CreateHisto("TL_jetdphi", "#Delta#phi between leading jet and loose muon", 315, 0, 3.15);
   CreateHisto("TL_ht", "event HT@GeV", 150, 0, 1500);
   CreateHisto("TL_nloose", "number of loose muons", 5, 0, 5);
   CreateHisto("TL_zmass", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 500);
+  CreateHisto("TL_mumudz", "#Delta dz between 2 muons", 1000, 0, 1.);
   CreateHisto("TL_mt", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
   CreateHisto("TL_st", "event ST@GeV", 100, 0, 1000);
   CreateHisto("TL_nmutight", "number of tight muons", 5, -0.5, 4.5);
@@ -1907,10 +1946,12 @@ void Analysis::CreateHistograms()
   // create individual histograms
   CreateHisto("DeltaPhi", "#Delta#phi(#mu_{1}, gaugino)", 315, 0., 3.15);
   CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("m_mumu_precut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
+  CreateHisto("m_gaugino_precut", "gaugino mass m(#mu_{1},j_{1},j_{2})", 25, 0, 1000);
   CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
-  CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
+  CreateHisto("m_smuon_precut", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
+  CreateHisto("muo_n_precut", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("CR1_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR2_m_mumu", "CR2 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR3_m_mumu", "CR3 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
