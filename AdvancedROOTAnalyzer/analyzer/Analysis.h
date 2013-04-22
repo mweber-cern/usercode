@@ -66,6 +66,7 @@ protected:
   Double_t fTL_zmass_min;
   Double_t fTL_zmass_max;
   Double_t fTL_mupt_min;
+  Double_t fTL_firstmupt_min;
   Double_t fTL_jetdphi_min;
   Double_t fTL_mumudphi_max;
   Double_t fTL_mt_max;
@@ -123,7 +124,6 @@ protected:
   void SignalStudy(int & charge);
   void TightLooseRatioCalculation(const vector<int> & loose_muons,
 				  const vector<int> & tight_muons,
-				  const vector<int> & muons,
 				  const vector<int> & jets,
 				  const double HT);
   double GetFakeRate(double muopt, double eta, double jetpt);
