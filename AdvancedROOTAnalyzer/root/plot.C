@@ -46,6 +46,9 @@ Int_t           gMaxSignal = 0;
 const char    * gSubDir = ".";
 const char    * gBase = 0;
 Bool_t          gIsColor = kTRUE;
+Int_t           gGrid = kFALSE;
+Bool_t          gMoveOverflow = kFALSE;
+Bool_t          gHasOverflow[gMaxPad] = { 0 };
 TH1D          * gFitSignal = 0;
 TH1D          * gFitBackground = 0;
 TH1D          * gFitData = 0;
@@ -367,10 +370,11 @@ void read_config_files(const char * configFileName = "plot.cfg")
       selector = strdup_new(Form("%s", backgrounds.at(i-gMaxSignal).Data()));
     }
     gProcess[i].fname = strdup_new(selector);
-    gProcess[i].tname = strdup_new(gConfig->GetValue(Form("%s.label", selector),
-						 gProcess[i].fname));
-    gProcess[i].fcolor = gConfig->GetValue(Form("%s.fcolor", selector),  i);
-    gProcess[i].lcolor = gConfig->GetValue(Form("%s.lcolor", selector),  gProcess[i].fcolor);
+    gProcess[i].tname = strdup_new(gConfig->GetValue(Form("%s.label", selector), gProcess[i].fname));
+    const char * fcolor = gConfig->GetValue(Form("%s.fcolor", selector), "1");
+    gProcess[i].fcolor = gROOT->ProcessLine(fcolor);
+    const char * lcolor = gConfig->GetValue(Form("%s.lcolor", selector), fcolor);
+    gProcess[i].lcolor = gROOT->ProcessLine(lcolor);
     gProcess[i].lstyle = gConfig->GetValue(Form("%s.lstyle", selector),  1);
     gProcess[i].hcolor = gConfig->GetValue(Form("%s.hcolor", selector),  kWhite);
     gProcess[i].hstyle = gConfig->GetValue(Form("%s.hstyle", selector),  1001);
@@ -658,7 +662,7 @@ void setup_dumpallplots(const char * configFileName)
   TH3::SetDefaultSumw2();
 
   // read configuration file
-  const char * expConfigFileName = gSystem->ExpandPathName(configFileName);
+  const char * expConfigFileName = gSystem->ExpandPathName(Form("../config/%s", configFileName));
   read_config_file(expConfigFileName);
   delete expConfigFileName;
 
@@ -884,10 +888,12 @@ void stage(Int_t i)
 
 const char * GetUnit(const char * hname)
 {
+  DEBUG("GetUnit() start");
   // get unit of histogram name for labelling y-axis automatically
   static char * unit = 0;
 
   if (unit != 0) {
+    DEBUG("deleting old unit: " << unit);
     delete[] unit;
     unit = 0;
   }
@@ -944,9 +950,10 @@ const char * GetXTitle(const TH1D * histo)
 
   DEBUG("x title after removing y part: " << pos);
 
-  char * upos = strchr(histo->GetTitle(), '@');
+  // find unit
+  char * upos = strchr(pos, '@');
   if (upos != 0) {
-    const char * unit = GetUnit(histo->GetTitle());
+    const char * unit = GetUnit(pos);
     // unit found
     DEBUG("title len = " << (int) (upos-pos));
     Long_t len = upos-pos;
@@ -983,9 +990,6 @@ const char * GetYTitle(const TH1D * histo)
   // find position where to separate the two strings
   char * pos = strchr(histo->GetTitle(), ':');
 
-  // get unit
-  const char * unit = GetUnit(histo->GetTitle());
-
   if (pos == 0) {
     DEBUG("no y title given");
     // check if bin names are given - in this case do not output bin width
@@ -996,6 +1000,8 @@ const char * GetYTitle(const TH1D * histo)
       return title;
     }
     // no y-title given
+    // get unit
+    const char * unit = GetUnit(histo->GetTitle());
     Double_t binsize = histo->GetBinWidth(1);
     // unit given
     if (unit) {
@@ -1020,10 +1026,32 @@ const char * GetYTitle(const TH1D * histo)
     }
   }
   else {
+    // OK, y title given
+
+    // cut title x part away
     Int_t len = strlen(histo->GetTitle())-strlen(pos);
-    title = new char[len+1];
-    strncpy(title, histo->GetTitle(), len);
-    title[len] = '\0';
+    char * ttitle = new char[len+1];
+    strncpy(ttitle, histo->GetTitle(), len);
+    ttitle[len] = '\0';
+    DEBUG("y title after cutting x-part away: " << ttitle);
+    
+    // find if it contains a unit
+    const char * unit = GetUnit(ttitle);
+    if (unit) {
+      // unit found
+      title = new char[strlen(ttitle)+4];
+      strncpy(title, ttitle, strlen(ttitle)-strlen(unit)-1);
+      DEBUG("title now = " << title);
+      strcat(title, " [");
+      DEBUG("title now = " << title);
+      strcat(title, unit);
+      DEBUG("title now = " << title);
+      strcat(title, "]");
+      DEBUG("title now = " << title);
+    }
+    else {
+      title = ttitle;
+    }
   }
 
   DEBUG("GetYTitle() end");
@@ -1143,6 +1171,40 @@ void drawcut()
   DEBUG("end drawcut");
 }
 
+void drawoverflow()
+{
+  if (!gHasOverflow[gPadNr] || !gMoveOverflow)
+    return;
+  
+  Double_t lmax = -1E99;
+  Double_t bw = 0;
+  Double_t xmax = 0, xmin = 0, ymin = 0;
+  // find maximum in the overflow bin
+  for (Int_t process = 0; process < gMaxProcess; process++) {
+    TH1D * h = gStack[gPadNr][process];
+    if (h == 0)
+      continue;
+    Int_t bin  = h->GetNbinsX();
+    lmax = TMath::Max(lmax, gStack[gPadNr][process]->GetBinContent(bin));
+    bw   = h->GetBinWidth(bin);
+    xmax = h->GetXaxis()->GetXmax();
+    xmin = h->GetXaxis()->GetXmin();
+    ymin = h->GetYaxis()->GetXmin();
+  }
+  if (lmax < 0)
+    return;
+  const char * text = "Last bin includes overflow";
+  // text above last bin
+  // TText * t   = new TText(x+bw/2,1.1*(lmax+sqrt(lmax)), "Overflow bin");
+  // t->SetTextAlign(12);
+  // text next to overflow bin, right from axis
+  TText * t = new TText(xmax+0.01*(xmax-xmin), ymin, text);
+  t->SetTextAlign(13);
+  t->SetTextSize(0.03);
+  t->SetTextAngle(90);
+  t->Draw();
+}
+
 void draw(Bool_t autotitle = kTRUE)
 {
   DEBUG("enter draw()");
@@ -1158,6 +1220,10 @@ void draw(Bool_t autotitle = kTRUE)
   else {
     MakeCanvas();
   }
+
+  // enable or disable grid in x and/or y
+  gPad->SetGridy((gGrid / 10) % 10);
+  gPad->SetGridx(gGrid % 10);
 
   // now draw all stacked histograms in canvas
   TH1D * histo = 0;
@@ -1282,6 +1348,7 @@ void draw(Bool_t autotitle = kTRUE)
 
   // draw cut (if it is there)
   drawcut();
+  drawoverflow();
   padupdate();
   DEBUG("leave draw()");
 }
@@ -1404,24 +1471,39 @@ void findmin(Double_t low = 0, Double_t up = 0)
 void zoom(Double_t low, Double_t up)
 {
   // zoom on x-axis
+  Double_t overflow = 0.;
   for (Int_t process = 0; process < gMaxProcess-1; process++) {
-    if (gStack[gPadNr][process]) {
-      gStack[gPadNr][process]->SetAxisRange(low, up);
+    TH1D * h = gStack[gPadNr][process];
+    if (h) {
+      h->SetAxisRange(low, up);
+      // count overflows in bins that are not shown
+      Int_t maxbin = h->GetXaxis()->FindFixBin(up);
+      for (Int_t i = maxbin+1; i <= h->GetNbinsX()+1; i++) {
+	overflow += h->GetBinContent(i);
+      }
     }
   }
+  // find out if now the histogram contains overflows
+  gHasOverflow[gPadNr] = overflow > 0.;
   padupdate();
 }
 
 void unzoom()
 {
   // unzoom x-axis
+  Double_t overflow = 0.;
   for (Int_t process = 0; process < gMaxProcess-1; process++) {
-    if (gStack[gPadNr][process]) {
-      TAxis * axis = gStack[gPadNr][process]->GetXaxis();
+    TH1D * h = gStack[gPadNr][process];
+    if (h) {
+      TAxis * axis = h->GetXaxis();
       if (axis)
 	axis->UnZoom();
+      // count overflows in bins that are not shown
+      overflow += h->GetBinContent(h->GetNbinsX()+1);
     }
   }
+  // find out if now the histogram contains overflows
+  gHasOverflow[gPadNr] = overflow > 0.;
   padupdate();
 }
 
@@ -1581,12 +1663,13 @@ void pprint(const char * hname)
  */
 void title(const char * title)
 {
-  Int_t first = FindFirstHisto();
-  if (first < 0)
-    return;
-
-  gStack[gPadNr][first]->SetTitle(title);
-
+  for (Int_t process = 0; process < gMaxProcess-1; process++) {
+    TH1D * h = gStack[gPadNr][process];
+    if (h) {
+      h->SetTitle(title);
+    }
+  }
+  DEBUG("title was set");
   // now use automatic title
   draw(kTRUE);
 }
@@ -1626,15 +1709,15 @@ void drawperiod(Int_t posi = -1)
   static TLatex * t[gMaxPad] = { 0 };
   char etext[50];
   if (gStart != gEnd) {
-    snprintf(etext, 50, "CMS %s - %s preliminary", gPeriod[gStart], gPeriod[gEnd]);
+    snprintf(etext, 50, "CMS %s - %s Work in progress", gPeriod[gStart], gPeriod[gEnd]); //preliminary
   }
   else {
-    snprintf(etext, 50, "CMS %s preliminary", gPeriod[gStart]);
+    snprintf(etext, 50, "CMS %s Work in progress", gPeriod[gStart]);
   }
 
-  Int_t hstart = FindFirstHisto();
-  if (hstart < 0)
-    return;
+  //Int_t hstart = FindFirstHisto();
+  //if (hstart < 0)
+  //  return;
   if (t[gPadNr] != 0) {
     delete t[gPadNr];
     t[gPadNr] = 0;
@@ -1800,6 +1883,14 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
   DEBUG("exit legend()");
 }
 
+// void lumi()
+// {
+//   const char * name[50];
+//   sprintf(name, "#int L dt = %2.1f pb^{-1}", lumi);
+//   t[gPadNr]->DrawLatex(0.4,0.92,name);
+//}
+
+
 void subfigure(const char * subfig)
 {
   // add entry for subfigure in the current canvas, e.g. "a)"
@@ -1937,6 +2028,7 @@ TH1D * addperiod(Int_t process, const char * hname,
       if (dtree == 0) {
 	// no tree found, try next period
 	ERROR("Tree \"" << treename << "\" not found in file " << fpath);
+	delete f;
 	continue;
       }
       // save tree data in my histogram
@@ -1964,6 +2056,17 @@ TH1D * addperiod(Int_t process, const char * hname,
     // check physical minimum
     if (htemp->GetMinimum() < 0) {
       ERROR("Minimum " << htemp->GetMinimum() << " < 0 in file "<< fpath);
+    }
+
+    // move overflow bin
+    Int_t bin = htemp->GetNbinsX();
+    if (htemp->GetBinContent(bin+1) > 0) {
+      gHasOverflow[gPadNr] = kTRUE;
+      if (gMoveOverflow) {
+	htemp->SetBinContent(bin, htemp->GetBinContent(bin)+htemp->GetBinContent(bin+1));
+	htemp->SetBinError(bin, TMath::Sqrt(TMath::Power(htemp->GetBinError(bin), 2) +
+					    TMath::Power(htemp->GetBinError(bin+1), 2)));
+      }
     }
 
     // scale mc according to luminosity
@@ -2000,7 +2103,7 @@ void auto_order()
   DEBUG("Enter auto_order()");
   Double_t integral[gMaxProcess];
   // order all but data
-  for (Int_t i = 0; i < gMaxProcess-1; i++) {
+  for (Int_t i = gMaxSignal; i < gMaxProcess-1; i++) {
     integral[i] = 0;
     if (!gHisto[gPadNr][i]) {
       continue;
@@ -2029,7 +2132,7 @@ void auto_order()
     }
     DEBUG(gProcess[i].fname << ": " << integral[i]);
   }
-  TMath::Sort(gMaxProcess-1, integral, gOrder[gPadNr]);
+  TMath::Sort(gMaxProcess-1-gMaxSignal, integral, gOrder[gPadNr]);
   DEBUG("leave auto_order()");
 }
 
@@ -2046,6 +2149,9 @@ void plot(const char * hname, const char * selection,
 
   // delete previously plotted histograms
   DeleteOld();
+
+  // reset overflow display
+  gHasOverflow[gPadNr] = kFALSE;
 
   // loop over all processes
   for (Int_t process = 0; process < gMaxProcess; process++) {
@@ -2506,8 +2612,6 @@ TH2D * dataHisto2()
   return hData;
 }
 
-
-
 void smooth(TH1D * histo, Double_t xlow, Double_t xup, Int_t nbins)
 {
   // smooth given histogram in range
@@ -2590,4 +2694,14 @@ void all(const char * command)
     cd(pad+1);
     gROOT->ProcessLine(command);
   }
+}
+
+void grid(Int_t xy)
+{
+  gGrid = xy;
+}
+
+void nogrid()
+{
+  grid(0);
 }

@@ -511,7 +511,7 @@ void tight_loose_ratioplot()
     if (strncmp(gProcess[process].fname, "qcd", 3) &&
 	strncmp(gProcess[process].fname, "dyll", 4) &&
 	strncmp(gProcess[process].fname, "ttjets", 6) &&
-	strncmp(gProcess[process].fname, "wjetstolnu", 6) &&
+	strncmp(gProcess[process].fname, "wjetstolnu", 10) &&
 	strncmp(gProcess[process].fname, "data", 3))
       continue;
     DEBUG("Creating histos for process " << gProcess[process].fname);
@@ -574,7 +574,8 @@ void tight_loose_ratioplot()
   TH1D * hdata_subtracted = get_subtracted_tight_loose_ratio(false, false);
   if (hdata_subtracted == 0)
     return;
-  TLine * l = new TLine(15., 0, 70., 0);
+  Double_t linemax = hdata_subtracted->GetXaxis()->GetXmax();
+  TLine * l = new TLine(20., 0, linemax, 0);
   l->SetLineStyle(kDotted);
   l->SetLineColor(kBlack);
   l->SetLineWidth(2);
@@ -725,9 +726,9 @@ const char * removeNames[] = {
   "wwdoubleparton",
   "wpluswplus",
   "wminuswminus",
-  "ttwplus",
-  "ttwminus",
   "ttz",
+  "ttwjets",
+  "ttwwjets",
   "www",
   "wwz",
   "wzz",

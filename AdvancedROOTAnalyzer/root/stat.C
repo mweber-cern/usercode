@@ -233,8 +233,8 @@ void chi2(Double_t low = 0, Double_t up = 0)
     end   = gStack[gPadNr][0]->GetNbinsX();
   } 
   else {
-    start = gStack[gPadNr][0]->GetXaxis()->FindBin(low);
-    end   = gStack[gPadNr][0]->GetXaxis()->FindBin(up);
+    start = gStack[gPadNr][0]->GetXaxis()->FindFixBin(low);
+    end   = gStack[gPadNr][0]->GetXaxis()->FindFixBin(up);
   }
 
   // compute chi2
@@ -265,8 +265,8 @@ void chi2low(Double_t low = 0, Double_t up = 0, Int_t nevents = 100000)
     end   = gStack[gPadNr][0]->GetNbinsX();
   } 
   else {
-    start = gStack[gPadNr][0]->GetXaxis()->FindBin(low);
-    end   = gStack[gPadNr][0]->GetXaxis()->FindBin(up);
+    start = gStack[gPadNr][0]->GetXaxis()->FindFixBin(low);
+    end   = gStack[gPadNr][0]->GetXaxis()->FindFixBin(up);
   }
 
   Double_t ChiSquare;
