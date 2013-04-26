@@ -1086,6 +1086,7 @@ Double_t GetOptMax(Int_t period, const char * hname)
   return GetOpt(period, hname, "max");
 }
 
+
 TArrow * arrow(Double_t position, Int_t neighbourbins)
 {
   DEBUG("start arrow");
@@ -1118,13 +1119,16 @@ TArrow * arrow(Double_t position, Int_t neighbourbins)
 
   Double_t ftop;
   if (gPad->GetLogy() == 0) {
-    fbottom += fmax * 0.1;
-    ftop     = TMath::Min(fbottom + fmax * 0.25, fmax);
+    fbottom = TMath::Min(fmax*0.95, fbottom += fmax * 0.1);
+    ftop    = TMath::Min(fmax, fbottom + fmax * 0.25);
   } else {
-    fbottom *= TMath::Power(10, 0.1*(TMath::Log10(fmax)-TMath::Log10(fmin)));
-    ftop     = TMath::Min(fbottom*TMath::Power(10, 0.25*(TMath::Log10(fmax)
-							 -TMath::Log10(fmin))), 
-			  fmax);
+    fbottom = TMath::Min(fmax/(TMath::Power(10, 0.05)*((TMath::Log10(fmax)
+							-TMath::Log10(fmin)))),
+			 fbottom*TMath::Power(10, 0.1*(TMath::Log10(fmax)
+						       -TMath::Log10(fmin))));
+    ftop    = TMath::Min(fmax,
+			 fbottom*TMath::Power(10, 0.25*(TMath::Log10(fmax)
+							-TMath::Log10(fmin))));
   }
   DEBUG("ftop = " << ftop);
   DEBUG("fbottom = " << fbottom);
