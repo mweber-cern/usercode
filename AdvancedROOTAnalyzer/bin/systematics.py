@@ -9,23 +9,18 @@ mydict = eval("""
 { 
   "LooseMuonRelIso" : 
   { 
-    "default" : "0.4", 
-    "syst" : ( "0.3", "0.5", "0.6", "0.8" )
+    "default" : "2.0", 
+    "syst" : ( "0.5", "1.0", "1.5", "2.5" )
   },
   "TL_jetpt_min" :
   {
-    "default" : "40",
-    "syst" : ( "50", "60", "80")
+    "default" : "50.",
+    "syst" : ( "40.", "60.", "70." )
   },
-  "FakeRateMethod" :
-  { 
-    "default" : "lastbin",
-    "syst"  : ( "zero" )
-  },
-  "TL_njets_min" :
-  { 
-    "default" : "2.",
-    "syst" : ( "1." )
+  "TL_mt_max" :
+  {
+    "default" : "40.",
+    "syst" : ( "30.", "50." )
   }
 }
 """)
