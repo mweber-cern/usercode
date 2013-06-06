@@ -69,6 +69,7 @@ protected:
   Double_t fTL_firstmupt_min;
   Double_t fTL_jetdphi_min;
   Double_t fTL_mumudphi_max;
+  Double_t fTL_mumudz_min;
   Double_t fTL_mt_max;
   Double_t fTL_njets_min;
 
