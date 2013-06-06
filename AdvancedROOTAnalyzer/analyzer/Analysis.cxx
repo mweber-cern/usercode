@@ -815,7 +815,7 @@ void Analysis::SignalStudy(int & charge)
 }
 
 void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
-					  const vector<int> & tight_muons,					  
+					  const vector<int> & tight_muons,
 					  const vector<int> & jets,
 					  const double HT)
 {
@@ -1143,7 +1143,10 @@ void Analysis::Loop()
 
     //////////////////////////////////////////////////////////////////////
     // PF jet smearing
+    double old_met = met_et[MET_INDEX];
     PFJetSmearing();
+    Fill("cutflow", "jetsmear");
+    DEBUG("cutflow " << "jetsmear");
 
     //////////////////////////////////////////////////////////////////////
     // Object ID
@@ -1227,6 +1230,7 @@ void Analysis::Loop()
       //Fill("nMuon_matched", matched);
       if ( !TriggerMatched(i, muonTriggerFilters) )
 	continue;
+
       // muo_PFiso
       // relative isolation
 
@@ -1337,7 +1341,9 @@ void Analysis::Loop()
       // ignoring the following filters
       if ( filterName.Contains("scrapingFilter")       ||
 	   filterName.Contains("ECALDeadCellFilterBE") ||
-	   filterName.Contains("MuonFailureFilter") ) {
+	   filterName.Contains("MuonFailureFilter")    ||
+	   ( fInputType != "data"  &&
+	     filterName.Contains("HCALLaserFilterFromTriggerResult")) ) {
 	continue;
       }
 
@@ -1493,12 +1499,8 @@ void Analysis::Loop()
     DEBUG("cutflow " << "muonID");
 
     //////////////////////////////////////////////////////////////////////
-    // jet smearing (JER)
-    Fill("pfmet_old", met_et[MET_INDEX]);
+    // jet smeaing (JER)
     PFJetSmearingCalculation();
-    Fill("cutflow", "jetsmear");
-    DEBUG("cutflow " << "jetsmear");
-    Fill("pfmet", met_et[MET_INDEX]);
 
     // create Lorentz vectors from selected particles
     fMuon0->SetXYZT(muo_px[fMuoId[0]], muo_py[fMuoId[0]],
@@ -1526,24 +1528,27 @@ void Analysis::Loop()
     Fill("cutflow", "m_mumu");
     DEBUG("cutflow " << "m_mumu");
 
-
     //////////////////////////////////////////////////////////////////////
     // B-tagging
     fIsBTagged = false;
     for (int n = 0; n < fJets; n++) {
       int jj = jets[n];
       Int_t truth = pfjet_truth[jj];
-      bool tagged = fBTagging.isBJet(pfjet_btag[jj], 
-				     truth < 0 ? 0 : truth_pdgid[truth],
-				     pfjet_pt[jj], 
-				     pfjet_eta[jj]);
-      Fill("isbtag", pfjet_btag[jj], tagged ? 1 : 0);
+      bool tagged = pfjet_btag[jj][6] > 0.679; // CVSM: http://cms.cern.ch/iCMS/jsp/openfile.jsp?tp=draft&files=AN2012_187_v5.pdf
+      // fBTagging.isBJet(pfjet_btag[jj][6], 
+      // 				   truth < 0 ? 0 : truth_pdgid[truth],
+      // 				   pfjet_pt[jj], 
+      // 				   pfjet_eta[jj]);
+      Fill("isbtag", pfjet_btag[jj][6], tagged ? 1 : 0);
       if (tagged)
 	fIsBTagged = true;
     }
 
     //////////////////////////////////////////////////////////////////////
     // MET cut with control regions
+    Fill("pfmet_old", old_met);
+    Fill("pfmet", met_et[MET_INDEX]);
+
     if (met_et[MET_INDEX] >= 50.) {
       // fill some histograms for inverse cut (needed for cross-checks), control region
       Fill("CR1_m_mumu", m_mumu);
@@ -1753,6 +1758,8 @@ void Analysis::CreateHistograms()
 
   // PF met rescaling for MC
   CreateHisto("pfmet_scaled", "scale factor f:PFMET@GeV", 500, 0, 500, 41, -0.005, 0.405);
+  CreateHisto("JER_randomsf", "rescaling factors; random", 600, -2, 4);
+  CreateHisto("JER_dptsf", "rescaling factors; from dpt", 600, -2, 4);
   CreateHisto("JER_deltae", "reco jet E - true jet E", 100, -50, 50);
   CreateHisto("JER_deltaepteta", "reco jet E - true jet E:p_{T}:#eta", 40, -100, 100, 200, 0, 1000, 5, 0, 2.5);
   CreateHisto("JER_scale", "(reco jet E - true jet E)/true jet E", 100, -2, 2);
@@ -1833,6 +1840,8 @@ void Analysis::CreateHistograms()
   CreateHisto("relIsoInJet", "muon relative isolation inside of jet", 200, 0, 10);
   CreateHisto("nMuon_matched", "muon trigger matching", 10, -0.5, 9.5);
 
+  CreateHisto("matched", "muon trigger matching", 5, -0.5, 4.5);
+
   // Object selection: jets
   CreateHisto("nPfJet_pt", "jet p_{T}", 1000, 0, 1000);
   CreateHisto("nPfJet_eta", "#eta_{jet}", 100, -3, 3);
@@ -1854,9 +1863,10 @@ void Analysis::CreateHistograms()
   CreateHisto("MJ_dR", "minimal #Delta R from muon to generated jet:minimal #Delta R from muon to generated muon", 20, 0, 4, 20, 0, 4);
 
   // event cleaning
-  CreateHisto("noise_ecal_r9", "noise_ecal_r9", 100, 0, 1);
   CreateHisto("p_CSCHaloFilter", "p_CSCHaloFilter", 2, 0, 2);
   CreateHisto("p_HCALLaserFilter", "p_HCALLaserFilter", 2, 0, 2);
+  CreateHisto("p_ecalLaserCorrFilter", "p_ecalLaserCorrFilter", 2, 0, 2);
+  CreateHisto("p_HCALLaserFilterFromTriggerResult", "p_HCALLaserFilterFromTriggerResult", 2, 0, 2);
   CreateHisto("p_ECALDeadCellFilterTP", "p_ECALDeadCellFilterTP", 2, 0, 2);
   CreateHisto("p_BadSuperCrystalFilter", "p_BadSuperCrystalFilter", 2, 0, 2);
   CreateHisto("p_TrackingFailureFilter", "p_TrackingFailureFilter", 2, 0, 2);
@@ -1952,6 +1962,7 @@ void Analysis::CreateHistograms()
   CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
   CreateHisto("m_smuon_precut", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 100, 0, 2000);
   CreateHisto("muo_n_precut", "Number of muons", 20, -0.5, 19.5);
+  CreateHisto("m_mumu_zpeak", "Z-Peak m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR1_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR2_m_mumu", "CR2 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR3_m_mumu", "CR3 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
@@ -2199,28 +2210,29 @@ Double_t Analysis::DeltaPhi(double a, double b) {
     return  2.*TMath::Pi() - temp;
 }
 
-
 double Analysis::GetJERScale(double eta)
 {
   eta = TMath::Abs(eta);
-  // values taken from hDottps://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
-  // but since these are scale-factors, subtracted by one
-  if (eta < 1.1) {
-    return 0.066; //+-0.007+0.07-0.072 
+  // values taken from https://twiki.cern.ch/twiki/bin/viewauth/CMS/JetResolution
+  if (eta < 0.5) {
+    return 1.052; //+-0.012+0.062-0.061
+  }
+  else if (eta < 1.1) {
+    return 1.057; //+-0.012+0.056-0.055
   }
   else if (eta < 1.7) {
-    return 0.191; //+-0.019+0.06-0.062 
+    return 1.096; //+-0.017+0.063-0.062
   }
   else if (eta < 2.3) {
-    return 0.096; //+-0.030+0.08-0.085 
+    return 1.134; //+-0.035+0.087-0.085
   }
   else if (eta < 5.0) {
-    return 0.166; //+-0.050+0.19-0.199 
+    return 1.288; //+-0.127+0.155-0.153
   }
   else {
     DEBUG("jet eta = " << eta << " out of range 0..5 in Analysis::GetJERScale");
     // return some value
-    return 0.166;
+    return 1.288;
   }
 }
 
@@ -2230,7 +2242,7 @@ void Analysis::PFJetSmearing()
   // save old value for later use
   fJER_met_old = met_et[MET_INDEX];
   // do not smear data
-  if (fInputType == "data" || fJER_calculation )
+  if (fInputType == "data" || fJER_calculation)
     return;
 
   // loop over all jets
@@ -2238,16 +2250,13 @@ void Analysis::PFJetSmearing()
     // correct only jets with pT > 15 GeV
     if (pfjet_pt[j] > 15.) {
       // match to generated jet
-      // int truth_jet = -1;
       double sum_truth = 0;
       for (int t = 0; t < truthjet_n; t++) {
         double dR = sqrt(pow(pfjet_eta[j]-truthjet_eta[t], 2) +
 			 pow(DeltaPhi(pfjet_phi[j],truthjet_phi[t]), 2));
         if (dR < 0.5) {
-	  // if (dpT > 0)
-	  //   WARNING("Analysis::PFJetSmearing() found more than one matching truth jet");
+	  // adding up all the jet components
 	  sum_truth += truthjet_pt[t];
-	  // truth_jet = t;
         }
       }
 
@@ -2255,33 +2264,38 @@ void Analysis::PFJetSmearing()
       double scale = 0;
       if (sum_truth == 0) {
 	// no truth jets found
-	dpt = TMath::Sqrt( TMath::Power(GetJERScale(pfjet_eta[j])+1,2) - 1 ) * fJER_smear;
-	scale = dpt/pfjet_pt[j];
-	DEBUG("Random: dpt = " << dpt << ", scale = " << scale);
+	dpt = gRandom->Gaus(fJER_center, TMath::Sqrt( TMath::Power(GetJERScale(pfjet_eta[j]),2) - 1 ) * fJER_smear);
+	scale = 1 + dpt/pfjet_pt[j];
+	Fill("JER_randomsf", scale);
+	DEBUG("Random: scale = " << scale);
       }
       else {
-	dpt = pfjet_pt[j] - sum_truth;
-	scale = dpt/pfjet_pt[j];
+	
+	scale = (sum_truth + GetJERScale(pfjet_eta[j]) * (pfjet_pt[j] - sum_truth)) / pfjet_pt[j];
+	Fill("JER_dptsf", scale);
 	// if (truth_jet != pfjet_truth[j])
 	//   WARNING("Calculated true jet: " << truth_jet << ", from SUSYAna: " << pfjet_truth[j]);
 	DEBUG("Scaled: dpt = " << dpt << ", scale = " << scale);
       }
       // correct MET
-      double rescale = GetJERScale(pfjet_eta[j])*scale;
+      met_ex[MET_INDEX]   -= pfjet_px[j] * (scale - 1.);
+      met_ey[MET_INDEX]   -= pfjet_py[j] * (scale - 1.);
 
       // correct PF jets
-      // @TODO E rescaling pointless if you changed to pt?
-      double ratio = 1. + rescale;
-      DEBUG("ratio = " << ratio);
-      pfjet_E[j]  *= ratio;
-      pfjet_Et[j] *= ratio;
-      pfjet_p[j]  *= ratio;
-      pfjet_pt[j] *= ratio;
-      pfjet_px[j] *= ratio;
-      pfjet_py[j] *= ratio;
-      pfjet_pz[j] *= ratio;
+      pfjet_E[j]  *= scale;
+      pfjet_Et[j] *= scale;
+      pfjet_p[j]  *= scale;
+      pfjet_pt[j] *= scale;
+      pfjet_px[j] *= scale;
+      pfjet_py[j] *= scale;
+      pfjet_pz[j] *= scale;
     }
   }
+  
+  // recalculate MET
+  TVector3 mpf(met_ex[MET_INDEX], met_ey[MET_INDEX], 0.);
+  met_phi[MET_INDEX] = mpf.Phi();
+  met_et[MET_INDEX]  = mpf.Perp();
 }
 
 void Analysis::PFJetSmearingCalculation()
