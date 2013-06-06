@@ -25,7 +25,7 @@ Int_t           nPad = 0;
 Bool_t          gGerman = kFALSE;
 Bool_t          gAutoOrder = kTRUE;
 Int_t           gMaxPeriod = 0;
-Int_t           gStage = 0;
+TString         gStage = "0";
 Int_t           gPadNr = 0;
 TH1D         ** gHisto[gMaxPad] = { 0 };   // size gMaxProcess
 TH1D         ** gStack[gMaxPad] = { 0 };   // size gMaxProcess
@@ -877,13 +877,10 @@ void period(const char * startperiod, const char * endperiod)
   readcuts();
 }
 
-void stage(Int_t i)
+void stage(TString s)
 {
   // set stage
-  if (i < 0) {
-    WARNING("given stage < 0");
-  }
-  gStage = i;
+  gStage = s;
 }
 
 const char * GetUnit(const char * hname)
@@ -2018,7 +2015,7 @@ TH1D * addperiod(Int_t process, const char * hname,
       sprintf(histname, "h1_%s", hname);
     }
     else if (gVersion == 1) {
-      sprintf(histname, "h1_%i_%s", gStage, hname);
+      sprintf(histname, "h1_%s_%s", gStage.Data(), hname);
     }
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
@@ -2261,7 +2258,7 @@ TH2D * addperiod2(Int_t process, const char * hname,
       sprintf(histname, "h2_%s", hname);
     }
     else if (gVersion == 1) {
-      sprintf(histname, "h2_%i_%s", gStage, hname);
+      sprintf(histname, "h2_%s_%s", gStage.Data(), hname);
     }
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
@@ -2409,7 +2406,7 @@ TH3D * addperiod3(Int_t process, const char * hname,
       sprintf(histname, "h3_%s", hname);
     }
     else if (gVersion == 1) {
-      sprintf(histname, "h3_%i_%s", gStage, hname);
+      sprintf(histname, "h3_%s_%s", gStage.Data(), hname);
     }
     key = (TKey *) f->GetKey(histname);
     DEBUG("Histogram key = " << key);
