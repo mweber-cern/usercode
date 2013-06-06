@@ -62,7 +62,7 @@ extern Bool_t         gAutoOrder;
 extern Int_t          gMaxPeriod;
 
 // number of analysis stage
-extern Int_t          gStage;
+extern TString        gStage;
 
 // max. number of subpads in canvas
 const  Int_t          gMaxPad = 9;
@@ -152,7 +152,7 @@ extern Bool_t         gMoveOverflow;
 // everyday use
 void selection(const char * subdir);
 void period(const char * startperiod, const char * endperiod = 0);
-void stage(Int_t i);
+void stage(TString s);
 void plot(const char * hname, const char * selection = "global_weight",
 	  Int_t nbins = 100, Double_t min = 0, Double_t max = 1);
 void plot2(const char * hname,
