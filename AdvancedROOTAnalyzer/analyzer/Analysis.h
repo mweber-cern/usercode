@@ -75,6 +75,7 @@ protected:
   Double_t fTL_nloose_max;
   Double_t fTL_zmass_min;
   Double_t fTL_zmass_max;
+  Double_t fTL_firstmupt_min;
   Double_t fTL_mupt_min;
   Double_t fTL_jetdphi_min;
   Double_t fTL_mt_max;

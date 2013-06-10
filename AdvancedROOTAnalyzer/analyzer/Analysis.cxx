@@ -119,6 +119,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   fTL_nloose_max = fCfgFile.GetValue("TL_nloose_max",  1.5);
   fTL_zmass_min = fCfgFile.GetValue("TL_zmass_min",  71.);
   fTL_zmass_max = fCfgFile.GetValue("TL_zmass_max",  111.);
+  fTL_firstmupt_min = fCfgFile.GetValue("TL_firstmupt_min", 20.);
   fTL_mupt_min = fCfgFile.GetValue("TL_mupt_min",  15.);
   fTL_jetdphi_min = fCfgFile.GetValue("TL_jetdphi_min",  1.0);
   fTL_mt_max = fCfgFile.GetValue("TL_mt_max",  40.);
@@ -131,6 +132,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   INFO("fTL_nloose_max: " << fTL_nloose_max);
   INFO("fTL_zmass_min: " << fTL_zmass_min);
   INFO("fTL_zmass_max: " << fTL_zmass_max);
+  INFO("fTL_firstmupt_min " << fTL_firstmupt_min);
   INFO("fTL_mupt_min: " << fTL_mupt_min);
   INFO("fTL_jetdphi_min: " << fTL_jetdphi_min);
   INFO("fTL_mt_max: " << fTL_mt_max);
@@ -160,7 +162,7 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
   // check for samples with bad pileup description
   if (fSample == "www" || fSample == "wwz" || fSample == "wzz" || fSample == "zzz"
       || fSample == "wwdoubleparton"
-      || fSample == "wminuswminus" || fSample == "wpluswplus") {
+      || fSample == "wminuswminus" || fSample == "wpluswplus" || fSample == "wgstartolnu2mu") {
     // these events are from an older production than Fall11. Do not
     // reweight, since the pileup description is wrong
     INFO("Processing sample with bad pu_num_int[], not reweighting");
@@ -230,11 +232,11 @@ Analysis::Analysis(TTree & inputTree, TTree & outputTree, TEnv & cfgFile)
       THROW("Could not get tight/loose 2D histogram from file");
     }
     delete fakeRateFileName;
+    INFO("Initialized fake rate by reading histograms from file");
   }
   fFakeRate[0] = 0.;
   fFakeRate[1] = 0.;
   fSingleFakeWeight = 0.;
-  INFO("Initialized fake rate by reading histograms from file");
 
   // Lumi ranges. Default: empty string, i.e. do not filter
 //   if (fInputType == "data")) {
@@ -601,6 +603,8 @@ void Analysis::TightLooseRatioCalculation(const vector<int> & loose_muons,
     double MT = TMath::Sqrt(2*met_et[MET_INDEX]*mu0.Pt()*(1.-cos_phi12));
     Fill("TL_mt", MT);
 
+    // satisfy double muon trigger requirement (not always necessary!)
+    QCDCuts.Set("nTL_firstmupt", fTL_firstmupt_min <= muo_pt[0], muo_pt[0]); 
     // muon pt requirement - needed for MC and data comparison
     QCDCuts.Set("nTL_mupt", fTL_mupt_min <= muo_pt[loose_muons[i]] , muo_pt[loose_muons[i]]);
     // require muons to be on "opposite" side to jet in phi
@@ -1149,8 +1153,10 @@ void Analysis::Loop()
     Fill("nElectron", nElectron);
     Fill("HBHE_Noise", filterHBHENoise() ? 1 : 0);
     // require good vertex, no electron in event, no ecal noise, no HBHE noise
-    if (nVertex < 1 || nElectron > 0 || (noise_ecal_pt > 3. && noise_ecal_r9 > 0.9)
-	|| !filterHBHENoise()) {
+    if (nVertex < 1 || 
+	nElectron > 0 || 
+	(noise_ecal_pt > 3. && noise_ecal_r9 > 0.9) ||
+	!filterHBHENoise()) {
       continue;
     }
     // @todo: filter bad HCAL laser events
@@ -1405,11 +1411,8 @@ void Analysis::Loop()
     Fill("cutflow", "#Delta#phi");
     DEBUG("cutflow " << "#Delta#phi");
 
-    // fill some histograms
-    Fill("m_mumu_cut", m_mumu);
-    Fill("muo_n_cut", muo_n);
+    // Vertex plots
     Fill("vtx_n", vtx_n);
-    Fill("ht", HT);
     for (int i = 0; i < vtx_n; i++) {
       Fill("vtx_ntr", vtx_ntr[i]);
       Fill("vtx_ndof", vtx_ndof[i]);
@@ -1417,8 +1420,16 @@ void Analysis::Loop()
       Fill("vtx_y", vtx_y[i]);
       Fill("vtx_z", vtx_z[i]);
     }
+    // Other plots
+    Fill("m_mumu_cut", m_mumu);
+    Fill("m_gaugino_cut", GauginoMass);
+    Fill("m_smuon_cut", SmuonMass);
+    Fill("m_smu_chi_cut", SmuonMass, GauginoMass);
+    Fill("jjmm_m_cut", SmuonMass, GauginoMass); // final binning
+    Fill("muo_n_cut", muo_n);
+    Fill("ht_cut", HT);
 
-    // muon charge
+    // muon charge cut
     Fill("Muon_charge", muo_charge[fMuoId[0]], muo_charge[fMuoId[1]]);
     Fill("Muon_ch", muo_charge[fMuoId[0]]*muo_charge[fMuoId[1]]);
     if ((muo_charge[fMuoId[0]]*muo_charge[fMuoId[1]]) == -1) {
@@ -1444,8 +1455,9 @@ void Analysis::Loop()
     Fill("btag_m_mumu", m_mumu);
     Fill("btag_m_gaugino", GauginoMass);
     Fill("btag_m_smuon", SmuonMass);
-    Fill("btag_jjmm_m", SmuonMass, GauginoMass);
     Fill("btag_m_smu_chi", SmuonMass, GauginoMass);
+    Fill("btag_jjmm_m", SmuonMass, GauginoMass);
+    Fill("btag_ht", HT);
 
     FillNoWeight("log_weight", TMath::Log(global_weight)/TMath::Log(10.));
 
@@ -1549,10 +1561,10 @@ void Analysis::CreateHistograms()
   CreateHisto("JER_scale", "(reco jet E - true jet E)/true jet E", 100, -2, 2);
 
   // Reskimming
-  CreateHisto("bSkim_muo_n", "Number of muons", 10, -0.5, 9.5);
+  CreateHisto("bSkim_muo_n", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("bSkim_muo_pt0", "pt of leading muon", 500, 0, 500);
   CreateHisto("bSkim_muo_pt1", "pt of second muon", 500, 0, 500);
-  CreateHisto("nSkim_muo_n", "Number of muons", 10, -0.5, 9.5);
+  CreateHisto("nSkim_muo_n", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("nSkim_muo_pt0", "pt of leading muon", 500, 0, 500);
   CreateHisto("nSkim_muo_pt1", "pt of second muon (skimmer cuts)", 500, 0, 500);
 
@@ -1659,6 +1671,7 @@ void Analysis::CreateHistograms()
   CreateHisto("nTL_jetpt", "leading jet pt@GeV", 150, 0, 1500);
   CreateHisto("nTL_ht", "event HT@GeV", 150, 0, 1500);
   CreateHisto("nTL_nloose", "number of loose muons", 5, -0.5, 4.5);
+  CreateHisto("nTL_firstmupt", "leading muon p_{T}@GeV", 500, 0, 500.);
   CreateHisto("nTL_mupt", "muon p_{T}@GeV", 100, 0, 100.);
   CreateHisto("nTL_jetdphi", "#Delta#phi between leading jet and loose muon", 315, 0, 3.15);
   CreateHisto("nTL_mt", "m_{T}(#mu, MET)@GeV", 500, 0, 500);
@@ -1702,45 +1715,54 @@ void Analysis::CreateHistograms()
   CreateHisto("Muon_charge", "muon charge:muon charge", 3, -1.5, 1.5, 3, -1.5, 1.5);
   CreateHisto("Muon_ch", "muon charge:muon charge", 2, -1.5, 0.5);
 
-  // create individual histograms
+  // DeltaPhi
   CreateHisto("DeltaPhi", "#Delta#phi(#mu_{1}, gaugino)", 315, 0., 3.15);
-  CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+
+  // before charge cut
+  const double bins[] = { 0, 300, 700, 5000 };
+  const int nMax = sizeof(bins)/sizeof(double)-1;
   CreateHisto("m_mumu_cut", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
-  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
+  CreateHisto("m_gaugino_cut", "gaugino mass m(#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("m_smuon_cut", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("m_smu_chi_cut", "m(#chi): m(#tilde{#mu})@GeV", 500, 0, 5000, 500, 0, 5000);
+  CreateHisto("jjmm_m_cut", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", nMax, bins, nMax, bins);
   CreateHisto("muo_n_cut", "Number of muons", 20, -0.5, 19.5);
+  CreateHisto("ht_cut", "HT@GeV", 100, 0, 500);
+
+  // Control region plots
   CreateHisto("CR1_m_mumu", "CR1 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR2_m_mumu", "CR2 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR3_m_mumu", "CR3 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
   CreateHisto("CR4_m_mumu", "CR4 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR4_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
-  CreateHisto("CR4_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
+  CreateHisto("CR4_m_gaugino", "gaugino mass m(#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("CR4_m_smuon", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", 500, 0, 5000);
   CreateHisto("CR5_m_mumu", "CR5 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR5_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
-  CreateHisto("CR5_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
+  CreateHisto("CR5_m_gaugino", "gaugino mass m(#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("CR5_m_smuon", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", 500, 0, 5000);
   CreateHisto("CR6_m_mumu", "CR6 m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("CR6_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
-  CreateHisto("CR6_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
+  CreateHisto("CR6_m_gaugino", "gaugino mass m(#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("CR6_m_smuon", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", 500, 0, 5000);
 
   const double binsb[] = { 0, 3.3, 100 };
   CreateHisto("isbtag", "isbtag:TCHE btag", 2, binsb, 2, 0, 2);
-  const double bins[] = { 0, 300, 700, 5000 };
-  const int nMax = sizeof(bins)/sizeof(double)-1;
-  CreateHisto("jjmm_m", "smuon mass m(#mu_{0},#mu_{1},jets)", nMax, bins, nMax, bins);
-  CreateHisto("m_smu_chi", "m(#chi): m(#tilde{#mu})", 110, 0, 2200, 25, 0, 500);
-  CreateHisto("muo_n", "Number of muons", 30, 0, 30);
+  CreateHisto("m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
+  CreateHisto("m_gaugino", "gaugino mass m(#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("m_smuon", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", 500, 0, 5000);
+  CreateHisto("m_smu_chi", "m(#chi): m(#tilde{#mu})@GeV", 500, 0, 5000, 500, 0, 5000);
+  CreateHisto("jjmm_m", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", nMax, bins, nMax, bins);
+  CreateHisto("muo_n", "Number of muons", 20, -0.5, 19.5);
   CreateHisto("ht", "HT@GeV", 100, 0, 500);
 
   // after btag cut
   CreateHisto("btag_m_mumu", "m(#mu^{+}, #mu^{-})@GeV", 500, 0, 1000);
-  CreateHisto("btag_m_gaugino", "gaugino mass m(#mu_{1},j_{1},j_{2})", 100, 0, 1000);
-  CreateHisto("btag_m_smuon", "smuon mass m(#mu_{0},#mu_{1},j_{1},j_{2})", 200, 0, 2000);
-  CreateHisto("btag_m_smu_chi", "m(#chi): m(#tilde{#mu})", 110, 0, 2200, 25, 0, 500);
+  CreateHisto("btag_m_gaugino", "gaugino mass m(#mu_{1},jets)@GeV", 5000, 0, 5000);
+  CreateHisto("btag_m_smuon", "smuon mass m(#mu_{0},#mu_{1},jets)@GeV", 5000, 0, 5000);
+  CreateHisto("btag_m_smu_chi", "m(#chi)@GeV:m(#tilde{#mu})@GeV", 500, 0, 5000, 500, 0, 5000);
+  CreateHisto("btag_jjmm_m", "m(#mu_{1},jets)@GeV:m(#mu_{0},#mu_{1},jets)@GeV", 
+	      nMax, bins, nMax, bins);
   CreateHisto("btag_ht", "HT@GeV", 100, 0, 500);
-  CreateHisto("btag_jjmm_m", "smuon mass m(#mu_{0},#mu_{1},jets)", nMax, bins, nMax, bins);
 
   // event weights
-  CreateHisto("weight", "weight", 200, 0., 10.);
   CreateHisto("log_global_weight", "log(global_weight)", 100, -5, 5);
   CreateHisto("log_weight", "log(weight)", 100, -5, 5);
 }
@@ -1934,7 +1956,7 @@ double Analysis::GetFakeRate(double muopt, double eta, double jetpt)
     WARNING("unexpected value " << fakeRate << " for T/L ratio in Analysis::GetFakeRate()");
     WARNING("muo pt= " << muopt << ", eta = " << eta << ", jetpt = " << jetpt);
     if (fakeRate < 0)
-      THROW("T/L ratio equals to or less than 0, cannot proceed");
+      fakeRate = 0;
     if (fakeRate >= 1)
       THROW("T/L ratio equals to or larger than 1, cannot proceed");
   }
