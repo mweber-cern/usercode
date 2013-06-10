@@ -1,14 +1,21 @@
 void setNiceColorPalette () {
-    const Int_t NRGBs = 5;
-    const Int_t NCont = 999;
+    // const Int_t NRGBs = 5;
+    // const Int_t NCont = 999;
+    // Double_t stops[NRGBs] = { 0.00, 0.34, 0.61, 0.84, 1.00 };
+    // Double_t red[NRGBs]   = { 0.00, 0.00, 0.87, 1.00, 0.51 };
+    // Double_t green[NRGBs] = { 0.00, 0.81, 1.00, 0.20, 0.00 };
+    // Double_t blue[NRGBs]  = { 0.51, 1.00, 0.12, 0.00, 0.00 };
+    // TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, NCont);
+    // gStyle->SetNumberContours(NCont);
 
-
-    Double_t stops[NRGBs] = { 0.00, 0.34, 0.61, 0.84, 1.00 };
-    Double_t red[NRGBs]   = { 0.00, 0.00, 0.87, 1.00, 0.51 };
-    Double_t green[NRGBs] = { 0.00, 0.81, 1.00, 0.20, 0.00 };
-    Double_t blue[NRGBs]  = { 0.51, 1.00, 0.12, 0.00, 0.00 };
-    TColor::CreateGradientColorTable(NRGBs, stops, red, green, blue, NCont);
-    gStyle->SetNumberContours(NCont);
+    const Int_t nRGBs = 5;
+    const Int_t NCont = 255;
+    Double_t stops[nRGBs] = { 0.00, 0.25, 0.50, 0.75, 1.00 };
+    Double_t red[nRGBs]   = { 1.00, 1.00, 1.00, 0.50, 0.00 };
+    Double_t green[nRGBs] = { 1.00, 1.00, 0.55, 0.00, 0.00 };
+    Double_t blue[nRGBs]  = { 1.00, 0.00, 0.00, 0.00, 0.00 };
+    TColor::CreateGradientColorTable(nRGBs, stops, red, green, blue, NCont);
+    gStyle->SetNumberContours(NCont);     
 }
 
 void rootlogon () {
@@ -16,11 +23,12 @@ void rootlogon () {
 
   // corrections to ugly ROOT standard style
   gROOT->SetStyle("Plain");
-  setNiceColorPalette();
 
   // load and apply CMS TDR style for plots
   gROOT->LoadMacro(Form("%s/root/tdrstyle.C", getenv("ARASYS")));
   setTDRStyle();
+
+  setNiceColorPalette();
 
   // load main macros
   gROOT->LoadMacro(Form("%s/root/plot.C+", getenv("ARASYS")));

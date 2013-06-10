@@ -141,7 +141,7 @@ void summarize_procs(const char * sel = "default29", const char * hname = "btag_
       if (!strcmp(procs[i][j].name, "TTWplus")) {
 	name = "VVV";
       }
-      else if (!strcmp(procs[i][j].name, "DoublePartonWW")) {
+      else if (!strcmp(procs[i][j].name, "WGstar")) {
 	name = "tt+V";
       }
       else if (!strcmp(procs[i][j].name, "WW")) {
@@ -327,3 +327,20 @@ void background_systematics()
 // {
 //   deltaN();
 // }
+
+void fr_sys_distrib()
+{
+  gStyle->SetOptStat(1111111);
+  const double val_qcd[] = {
+    27, -18, -34, -51, -3, -13, -28
+  };
+  const double val_w[] = {
+    23, -21, -8, -26, 5, 13, 28
+  };
+
+  TH1D * h1 = new TH1D("h1", "val", 100, -50, 50);
+  for (int i = 0; i < 7; i++) {
+    h1->Fill(val_qcd[i]*0.2+val_w[i]);
+  }
+  // h1->Fit("gaus");
+}

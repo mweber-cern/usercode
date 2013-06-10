@@ -750,8 +750,8 @@ void get2dstatistics(const TH2D * h2, double values[6][2])
     return;
   }
   int bin = 0;
-  for (int binx = 1; binx <= h2->GetNbinsX(); binx++) {
-    for (int biny = 1; biny <= binx; biny++) {
+  for (int biny = 1; biny <= h2->GetNbinsY(); biny++) {
+    for (int binx = biny; binx <= h2->GetNbinsX(); binx++) {
       // cout << "binx = " << binx << ", biny = " << biny << endl;
       cout << "x=" << setw(4) << h2->GetXaxis()->GetBinLowEdge(binx)
   	   << ".." << setw(4) << h2->GetXaxis()->GetBinUpEdge(binx) << ", ";
@@ -776,64 +776,78 @@ void paperplots(const char * sel)
   // make plots for AN and paper
   selection(sel);
 
-  // T/L ratio selection
-  tightlooseplots();
+  // // T/L ratio selection
+  // tightlooseplots();
 
-  // T/L ratio plots
-  get_subtracted_tight_loose_ratio();
-  tight_loose_ratioplot();
+  // // T/L ratio plots
+  // get_subtracted_tight_loose_ratio();
+  // tight_loose_ratioplot();
 
-  // btag control region
-  cd(1);
-  plot("CR1_m_mumu");
-  zoom(0,300);
-  legend();
-  pprint();
-  cd(2);
-  plot("CR2_m_mumu");
-  zoom(0,300);
-  legend();
-  pprint();
+  // // btag control region
+  // cd(1);
+  // plot("CR1_m_mumu");
+  // zoom(0,300);
+  // legend();
+  // pprint();
+  // cd(2);
+  // plot("CR2_m_mumu");
+  // zoom(0,300);
+  // legend();
+  // pprint();
 
-  // Fakes (signal region) m_smuon
-  TH1D * h_smuon = fake_estimate_1d(sel, "btag_m_smuon");
-  cd(1);
-  rebin(4);
-  legend();
-  gPad->Print("m_smuon_singlefake.pdf");
-  cd(2);
-  rebin(4);
-  legend();
-  gPad->Print("m_smuon_doublefake.pdf");
+  // // Fakes (signal region) m_smuon
+  // TH1D * h_smuon = fake_estimate_1d(sel, "btag_m_smuon");
+  // cd(1);
+  // rebin(50);
+  // zoom(0,1500);
+  // max(4);
+  // legend();
+  // gPad->Print("m_smuon_singlefake.pdf");
+  // cd(2);
+  // rebin(50);
+  // zoom(0,1500);
+  // max(1);
+  // legend();
+  // gPad->Print("m_smuon_doublefake.pdf");
 
-  // Fakes (signal region) m_gaugino
-  TH1D * h_gaugino = fake_estimate_1d(sel, "btag_m_gaugino");
-  cd(1);
-  rebin(4);
-  legend();
-  gPad->Print("m_gaugino_singlefake.pdf");
-  cd(2);
-  rebin(4);
-  legend();
-  gPad->Print("m_gaugino_doublefake.pdf");
+  // // Fakes (signal region) m_gaugino
+  // TH1D * h_gaugino = fake_estimate_1d(sel, "btag_m_gaugino");
+  // cd(1);
+  // rebin(4);
+  // legend();
+  // gPad->Print("m_gaugino_singlefake.pdf");
+  // cd(2);
+  // rebin(4);
+  // legend();
+  // gPad->Print("m_gaugino_doublefake.pdf");
 
-  // Save fakes to a file
-  TFile * f = new TFile("fakes.root", "RECREATE");
-  h_smuon->SetName("h1_6_jjmm_m");
-  h_smuon->Write();
-  h_gaugino->SetName("h1_6_jjm_m");
-  h_gaugino->Write();
-  f->Close();
-  delete f;
+  // // 2D fake estimate
+  // TH2D * h_smu_chi = fake_estimate_2d(sel, "btag_m_smu_chi");
 
+  // // Save fakes to a file
+  // TFile * f = new TFile("fakes.root", "RECREATE");
+  // h_smuon->SetName("h1_6_jjmm_m");
+  // h_smuon->Write();
+  // h_gaugino->SetName("h1_6_jjm_m");
+  // h_gaugino->Write();
+  // h_smu_chi->SetName("h2_6_jjmm_jjm_m");
+  // h_smu_chi->Write();
+  // f->Close();
+  // delete f;
+
+  // MakeCanvas();
   // Fakes (control region)
   fake_estimate_1d(sel, "CR6_m_smuon");
   cd(1);
   rebin(5);
+  zoom(0,1500);
+  max(4);
   legend();
   gPad->Print("CR_singlefake.pdf");
   cd(2);
   rebin(5);
+  zoom(0, 1500);
+  max(1);
   legend();
   gPad->Print("CR_doublefake.pdf");
 }

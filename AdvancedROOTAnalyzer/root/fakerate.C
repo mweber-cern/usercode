@@ -137,7 +137,36 @@ void replace_with_average(TH2D * histo, int i, int j)
   histo->SetBinContent(i, j, average);
 }
 
-void fix_2d_histo(TH2D * hTight2, TH2D * hLoose2)
+void replace_with_weighted_average(TH2D * histo, int i, int j)
+{
+  int min_i = TMath::Max(1, i-1);
+  int max_i = TMath::Min(histo->GetNbinsX(), i+1);
+  int min_j = TMath::Max(1, j-1);
+  int max_j = TMath::Min(histo->GetNbinsY(), j+1);
+  INFO("replacing from x bins = " << min_i << ".." << max_i);
+  INFO("replacing from y bins = " << min_j << ".." << max_j);
+  double average = 0.;
+  double sumweight = 0;
+  for (int ni = min_i ; ni <= max_i; ni++) {
+    for (int nj = min_j; nj <= max_j; nj++) {
+      // do not take into account wrong bin
+      if (ni == i || nj == j) 
+	continue;
+      // build average
+      double weight = TMath::Power(histo->GetBinError(ni,nj), -2.);
+      average += weight*histo->GetBinContent(ni, nj);
+      sumweight += weight;
+    }
+  }
+  average /= sumweight;
+  INFO("Fixing bin " << get_bin_edges(histo, i, j) 
+       << " old value = " << histo->GetBinContent(i,j) << " +/- " << histo->GetBinError(i,j)
+       << " to average = " << average << " +/- " << 1./sumweight);
+  histo->SetBinContent(i, j, average);
+  histo->SetBinError(i,j, 1./sumweight);
+}
+
+void average_2d_histo(TH2D * hTight2, TH2D * hLoose2)
 {
   for (Int_t i = 1;  i < hTight2->GetNbinsX()+1; i++) {
     for (Int_t j = 1; j < hTight2->GetNbinsY()+1; j++) {
@@ -147,13 +176,46 @@ void fix_2d_histo(TH2D * hTight2, TH2D * hLoose2)
       if (nLoose < 0) {
 	ERROR("nLoose < 0");
 	INFO("nLoose(" << get_bin_edges(hLoose2, i, j) << " ) =" << nLoose);
-	replace_with_average(hLoose2, i, j);
+	replace_with_weighted_average(hLoose2, i, j);
       }
       if (nLoose < nTight || nTight < 0) {
 	ERROR("nLoose < nTight || nTight < 0");
 	INFO("nLoose(" << get_bin_edges(hLoose2, i, j) << " ) =" << nLoose);
 	INFO("nTight(" << get_bin_edges(hTight2, i, j) << " ) =" << nTight);
-	replace_with_average(hTight2, i, j);
+	replace_with_weighted_average(hTight2, i, j);
+      }
+    }
+  }  
+}
+
+void fix_2d_histo(TH2D * hTight2, TH2D * hLoose2)
+{
+  for (Int_t i = 1;  i < hTight2->GetNbinsX()+1; i++) {
+    for (Int_t j = 1; j < hTight2->GetNbinsY()+1; j++) {
+      Double_t nLoose = hLoose2->GetBinContent(i, j);
+      Double_t nTight = hTight2->GetBinContent(i, j);
+
+      if (nLoose < 0) {
+	INFO("nLoose(" << get_bin_edges(hLoose2, i, j) << " ) =" << nLoose
+	     << " +/- " << hLoose2->GetBinError(i,j));
+	if (nLoose + hLoose2->GetBinError(i, j) > 0) {
+	  INFO(" --> 0");
+	  hLoose2->SetBinContent(i, j, 0);
+	}
+	else {
+	  replace_with_weighted_average(hLoose2, i, j);
+	}
+      }
+      if (nTight < 0) {
+	INFO("nTight(" << get_bin_edges(hTight2, i, j) << " ) =" << nTight
+	     << " +/- " << hTight2->GetBinError(i,j));
+	if (nTight + hTight2->GetBinError(i, j) > 0) {
+	  INFO(" -> 0");
+	  hTight2->SetBinContent(i, j, 0);
+	}
+	else {
+	  replace_with_weighted_average(hTight2, i, j);
+	}
       }
     }
   }  
@@ -252,15 +314,15 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
 	Double_t error  = hRatio3->GetBinError(i, j, k);
 
 	if (nLoose < nTight || nLoose < 0) {
-	  cerr << "ERR: nLoose is wrong in your histogram" << endl;
-	  cout << "INFO: nLoose(" << get_bin_edges(hRatio3, i, j, k) << ") " << nLoose << endl;
-	  cout << "INFO: nTight(" << get_bin_edges(hRatio3, i, j, k) << ") " << nTight << endl;
+	  // cerr << "ERR: nLoose is wrong in your histogram" << endl;
+	  // cout << "INFO: nLoose(" << get_bin_edges(hRatio3, i, j, k) << ") " << nLoose << endl;
+	  // cout << "INFO: nTight(" << get_bin_edges(hRatio3, i, j, k) << ") " << nTight << endl;
 	}
 	if (nLoose != 0 && nRatio != nTight/nLoose) {
 	  cerr << "ERR: ROOT calculation went wrong" << endl;
 	}
 	if (nRatio < 0 || nRatio >= 1.) {
-	  cerr << "ERR: Found unreasonable values for T/L ratio" << endl;
+	  // cerr << "ERR: Found unreasonable values for T/L ratio" << endl;
 	}
 	if (nRatio != 0) {
 	  cout << "INFO: T/L (" << get_bin_edges(hRatio3, i, j, k) << ") " 
@@ -293,12 +355,13 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
   hRatio2->SetDirectory(0);
   hRatio2->SetName("hRatio2");
   hRatio2->SetTitle("Tight/Loose ratio (T/L) (2D)");
+  hRatio2->SetMinimum(0.0);
 
   if (draw) {
     cd(3); 
     setopt(hLoose2);
     hLoose2->SetXTitle("muon p_{T} [GeV]");
-    hLoose2->SetYTitle("muon #eta");
+    hLoose2->SetYTitle("muon |#eta|");
     hLoose2->SetZTitle("number of loose muons");
     hLoose2->SetTitleOffset(1.5, "X");
     hLoose2->SetTitleOffset(1.5, "Y");
@@ -346,7 +409,7 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
 	ERROR("Found unreasonable values for T/L ratio");
 	INFO("T/L (" << get_bin_edges(hRatio2, i, j) << ") " 
 	     << nRatio << " +- " << error);
-	replace_with_average(hRatio2, i, j);
+	// replace_with_average(hRatio2, i, j);
       }
       if (nRatio != 0) {
 	DEBUG("T/L (" << get_bin_edges(hRatio2, i, j) << ") " 
@@ -371,7 +434,9 @@ TH1D * get_subtracted_tight_loose_ratio(bool save, bool draw)
     TCanvas * c2 = new TCanvas("c2", "canvas for printing", 0, 0, Int_t(640.*TMath::Sqrt(2.)), 640);
     setopt(c2);
     hRatio2->Draw("lego2");
-    hRatio2->SetMaximum(1.0);    
+    hRatio2->SetMaximum(1.0);
+    hRatio2->SetMinimum(0.0);
+    hRatio2->SetYTitle("muon |#eta|");
     gPad->Print("tlratio2d.pdf");
     delete c2;
   }
@@ -488,7 +553,7 @@ void tight_loose_ratioplot()
   plot3("LooseMuons");
   cd(1);
 
-  TLegend * leg = new TLegend(0.53, 0.52, 0.77, 0.84);
+  TLegend * leg = new TLegend(0.31, 0.53, 0.55, 0.85);
   setopt(leg);
   Bool_t first = kTRUE;
 
@@ -554,7 +619,7 @@ void tight_loose_ratioplot()
     DEBUG("Draw");
     if (first) {
       histo->SetMaximum(1.);
-      histo->SetMinimum(-0.1);
+      histo->SetMinimum(-0.2);
       histo->SetXTitle("p_{T}(#mu) [GeV]");
       histo->SetYTitle("T/L ratio");
       histo->Draw("ehisto");
@@ -598,7 +663,6 @@ void tightlooseplots(int start, int end)
 	logy();
 	min(0.1);
 	max(1e7);
-	//arrow(50.);
 	legend(1e-3);
 	pprint();
 
@@ -607,7 +671,6 @@ void tightlooseplots(int start, int end)
 	max(1e6);
 	min(0.1);
 	logy();
-	//arrow(50.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_1.pdf");
@@ -619,7 +682,6 @@ void tightlooseplots(int start, int end)
 	logy();
 	min(0.1);
 	max(1e6);
-	//arrow(15.);
 	legend(1e-3);
 	pprint();
 
@@ -629,7 +691,6 @@ void tightlooseplots(int start, int end)
 	min(0.1);
 	max(1e7);
 	zoom(0, 700);
-	//arrow(40.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_2.pdf");
@@ -640,15 +701,13 @@ void tightlooseplots(int start, int end)
 	liny();
 	plot("nTL_jetdphi");
 	min(0.1);
-	//arrow(1.);
 	legend(1e-3, 0);
 	pprint();
 
 	cd(2);
+	liny();
 	plot("nTL_mt");
 	zoom(0, 100);
-	liny();
-	//arrow(40.);
 	legend(1e-3);
 	pprint();
 	print("tightloose_3.pdf");  
@@ -658,10 +717,7 @@ void tightlooseplots(int start, int end)
 	cd(1);
 	liny();
 	plot("nTL_zmass");
-	//arrow(71.);
-	//arrow(111.);
 	zoom(0, 200);
-	min(0.1);
 	legend(1e-3);
 	pprint();
 	
@@ -669,8 +725,6 @@ void tightlooseplots(int start, int end)
 	plot("nTL_nloose");
 	min(0.1);
 	logy();
-	//arrow(0.5);
-	//arrow(1.5);
 	legend(1e-3);
 	pprint();
 	print("tightloose_4.pdf");  
