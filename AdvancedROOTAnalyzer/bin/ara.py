@@ -214,13 +214,12 @@ def get_maximum_jobs(njobs):
     """Throttle the maximum number of jobs during typical office hours in order
 not to overload the network"""
     ltime = time.localtime()
-    if ltime.tm_hour > 9 and ltime.tm_hour < 20:
-        return njobs / 4
+    if ltime.tm_hour > 9 and ltime.tm_hour < 20 and ltime.tm_wday < 5:
+        return 5
     else:
         return njobs
 
 def wait_for_jobs(njobs):
-    njobs = get_maximum_jobs(njobs)
     wait = True
     while wait:
         # check how many jobs are running already
@@ -240,8 +239,23 @@ def wait_for_jobs(njobs):
                 if line.split()[5] != "H":
                     jobcount += 1
         # if the maximal job count is exceeded, sleep for a while
-        if jobcount >= njobs:
-            print "Reached " + str(njobs) + " jobs, sleeping for 30 s..."
+        if jobcount > njobs:
+            print "Exceeded " + str(njobs) + " jobs, sleeping for 30 s..."
             time.sleep(30)
         else:
             wait = False
+
+
+def create_config_file(template, replacements, destination):
+    """Open the template file and write its content to destination, 
+    replacing all keys in the dictionary 'replacements'"""
+    opwd = os.getcwd()
+    os.chdir("%s/config" % os.environ["ARASYS"])
+    with open(destination, 'w') as f2:
+        with open(template) as f:
+            for line in f:
+                for key in replacements:
+                    line = line.replace(key, replacements[key])
+                f2.write(line)
+    os.chdir(opwd)
+

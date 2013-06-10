@@ -15,7 +15,7 @@ def resubmit(filename, period):
     myDir = basedir + '/' + options.selection + '/' + period
     os.chdir(myDir)
     condor_jobfile = myDir+'/'+filename+"_condor.cfg"
-    ara.wait_for_jobs(options.njobs)
+    ara.wait_for_jobs(ara.get_maximum_jobs(options.njobs))
     print "Resubmitting", condor_jobfile
     rc = ara.getCommandOutput2("condor_submit " + condor_jobfile)
     return rc
