@@ -32,7 +32,22 @@
  *
  */
 
-double crystal_ball(double x, double alpha, double n, double mean, double sigma)
+double crystal_ball_right(double x, double alpha, double n, double mean, double sigma)
+{
+  if ((x - mean) <= alpha*sigma) {
+    // gaussian core
+    double val = (x-mean)/sigma;
+    return TMath::Exp(-val*val/2.);
+  }
+  else {
+    // power-law tail
+    double B = n/alpha - alpha;
+    double A = TMath::Power(n/alpha, n) * TMath::Exp(-alpha*alpha/2.);
+    return A*TMath::Power(B-(mean-x)/sigma, -n);
+  }
+}
+
+double crystal_ball_left(double x, double alpha, double n, double mean, double sigma)
 {
   if (x - mean >= - alpha*sigma) {
     // gaussian core
@@ -52,19 +67,19 @@ void test_crystal_ball()
   // plotting range
   const int nMax = 1000;
   const double xlow = -10;
-  const double xup = 4;
+  const double xup = 10;
 
   // parameters for function
   double n = 1;
   double alpha = 1; 
-  double mean = 0.;
+  double mean = 2.;
   double sigma = 1.;
   const char * title = Form("Crystal ball n = %f, #alpha = %f, #bar{x} = %f, #sigma = %f",
 			    n, alpha, mean, sigma);
 			    
   TH1D * h1 = new TH1D("h1", title, 1000, xlow, xup);
   for (int i = 0; i < nMax; i++) {
-    h1->SetBinContent(i+1, crystal_ball(xlow+(xup-xlow)/1000.*i, alpha, n, mean, sigma));
+    h1->SetBinContent(i+1, crystal_ball_right(xlow+(xup-xlow)/1000.*i, alpha, n, mean, sigma));
   }
 
   n = 2;
@@ -73,7 +88,7 @@ void test_crystal_ball()
 			    
   TH1D * h2 = new TH1D("h2", title, 1000, xlow, xup);
   for (int i = 0; i < nMax; i++) {
-    h2->SetBinContent(i+1, crystal_ball(xlow+(xup-xlow)/1000.*i, alpha, n, mean, sigma));
+    h2->SetBinContent(i+1, crystal_ball_right(xlow+(xup-xlow)/1000.*i, alpha, n, mean, sigma));
   }
 
   n = 1;
@@ -83,7 +98,7 @@ void test_crystal_ball()
 			    
   TH1D * h3 = new TH1D("h3", title, 1000, xlow, xup);
   for (int i = 0; i < nMax; i++) {
-    h3->SetBinContent(i+1, crystal_ball(xlow+(xup-xlow)/1000.*i, alpha, n, mean, sigma));
+    h3->SetBinContent(i+1, crystal_ball_right(xlow+(xup-xlow)/1000.*i, alpha, n, mean, sigma));
   }
 
   TCanvas * c1 = new TCanvas;
