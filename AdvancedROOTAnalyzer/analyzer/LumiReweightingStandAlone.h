@@ -32,7 +32,7 @@
 namespace reweight {
 
 
-  // add a class to shift the mean of a poisson-like luminosity distribution by an arbitrary amount. 
+  // add a class to shift the mean of a poisson-like luminosity distribution by an arbitrary amount.
   // Only valid for small (<1.5) shifts about the 2011 lumi distribution for now, because shifts are non-linear
   // Each PoissonMeanShifter does one shift, so defining multiples can give you an arbitrary collection
 
@@ -197,7 +197,7 @@ namespace reweight {
 	else {
 	  Pweight_[ibin] = p1_expoP[ibin-20]*exp(p2_expoP[ibin-20]*Shift);
 	}
-      } 
+      }
 
     };
 
@@ -233,9 +233,9 @@ namespace reweight {
 		     std::string dataFile,
 		     std::string GenHistName,
 		     std::string DataHistName) :
-      generatedFileName_( generatedFile), 
-      dataFileName_     ( dataFile ), 
-      GenHistName_      ( GenHistName ), 
+      generatedFileName_( generatedFile),
+      dataFileName_     ( dataFile ),
+      GenHistName_      ( GenHistName ),
       DataHistName_     ( DataHistName )
 	{
 	  generatedFile_ = new TFile( generatedFileName_.c_str() ) ; //MC distribution
@@ -244,8 +244,9 @@ namespace reweight {
 	  Data_distr_ = new TH1D(  *(static_cast<TH1D*>(dataFile_->Get( DataHistName_.c_str() )->Clone() )) );
 	  MC_distr_ = new TH1D(  *(static_cast<TH1D*>(generatedFile_->Get( GenHistName_.c_str() )->Clone() )) );
 
-	  // normalize both histograms first                                                                            
+	  
 
+	  // normalize both histograms first
 	  Data_distr_->Scale( 1.0/ Data_distr_->Integral() );
 	  MC_distr_->Scale( 1.0/ MC_distr_->Integral() );
 
@@ -273,15 +274,15 @@ namespace reweight {
 
 	}
 
-    
+
       LumiReWeighting( std::vector< float > MC_distr, std::vector< float > Lumi_distr){
 	// no histograms for input: use vectors
-  
+
 	// now, make histograms out of them:
 
 	// first, check they are the same size...
 
-	if( MC_distr.size() != Lumi_distr.size() ){   
+	if( MC_distr.size() != Lumi_distr.size() ){
 
 	  std::cerr <<"ERROR: LumiReWeighting: input vectors have different sizes. Quitting... \n";
 	  return;
@@ -316,7 +317,7 @@ namespace reweight {
 	  MC_distr_->Scale(1.0/ deltaMC );
 	}
 
-	weights_->Divide( den );  // so now the average weight should be 1.0    
+	weights_->Divide( den );  // so now the average weight should be 1.0
 
 	std::cout << " Lumi/Pileup Reweighting: Computed Weights per In-Time Nint " << std::endl;
 
@@ -330,7 +331,7 @@ namespace reweight {
 
       }
 
-      void weight3D_init( float ScaleFactor, std::string WeightOutputFile="") { 
+      void weight3D_init( float ScaleFactor, std::string WeightOutputFile="") {
 
 	//create histogram to write output weights, save pain of generating them again...
 
@@ -378,17 +379,17 @@ namespace reweight {
 	double Expval, mean;
 	int xi;
 
-	// Get entries for Data, MC, fill arrays:                                                                                                 
+	// Get entries for Data, MC, fill arrays:
 	int NMCbin = MC_distr_->GetNbinsX();
 
 	for (int jbin=1;jbin<NMCbin+1;jbin++) {
 	  x =  MC_distr_->GetBinCenter(jbin);
-	  xweight = MC_distr_->GetBinContent(jbin); //use as weight for matrix         
+	  xweight = MC_distr_->GetBinContent(jbin); //use as weight for matrix
 
-	  //for Summer 11, we have this int feature:                      
+	  //for Summer 11, we have this int feature:
 	  xi = int(x);
 
-	  // Generate Poisson distribution for each value of the mean     
+	  // Generate Poisson distribution for each value of the mean
 	  mean = double(xi);
 
 	  if(mean<0.) {
@@ -408,17 +409,17 @@ namespace reweight {
 
 	  for (int i = 1; i<50; ++i) {
 	    base = base*mean;
-	    PowerSer[i] = base; // PowerSer is mean^i                        
+	    PowerSer[i] = base; // PowerSer is mean^i
 	  }
 
-	  // compute poisson probability for each Nvtx in weight matrix      
+	  // compute poisson probability for each Nvtx in weight matrix
 	  for (int i=0; i<50; i++) {
 	    probi = PowerSer[i]/factorial[i]*Expval;
 	    for(int j=0; j<50; j++) {
 	      probj = PowerSer[j]/factorial[j]*Expval;
 	      for(int k=0; k<50; k++) {
 		probk = PowerSer[k]/factorial[k]*Expval;
-		// joint probability is product of event weights multiplied by weight of input distribution bin                                   
+		// joint probability is product of event weights multiplied by weight of input distribution bin
 		MC_ints[i][j][k] = MC_ints[i][j][k]+probi*probj*probk*xweight;
 	      }
 	    }
@@ -452,7 +453,7 @@ namespace reweight {
 	    PowerSer[i] = base;
 	  }
 
-	  // compute poisson probability for each Nvtx in weight matrix                                                                           
+	  // compute poisson probability for each Nvtx in weight matrix
 
 	  for (int i=0; i<50; i++) {
 	    probi = PowerSer[i]/factorial[i]*Expval;
@@ -460,7 +461,7 @@ namespace reweight {
 	      probj = PowerSer[j]/factorial[j]*Expval;
 	      for(int k=0; k<50; k++) {
 		probk = PowerSer[k]/factorial[k]*Expval;
-		// joint probability is product of event weights multiplied by weight of input distribution bin                                   
+		// joint probability is product of event weights multiplied by weight of input distribution bin
 		Data_ints[i][j][k] = Data_ints[i][j][k]+probi*probj*probk*xweight;
 	      }
 	    }
@@ -470,7 +471,7 @@ namespace reweight {
 
 
 	for (int i=0; i<50; i++) {
-	  //if(i<5) std::cout << "i = " << i << std::endl;                       
+	  //if(i<5) std::cout << "i = " << i << std::endl;
 	  for(int j=0; j<50; j++) {
 	    for(int k=0; k<50; k++) {
 	      if( (MC_ints[i][j][k])>0.) {
@@ -482,9 +483,9 @@ namespace reweight {
 	      WHist->SetBinContent( i+1,j+1,k+1,Weight3D_[i][j][k] );
 	      DHist->SetBinContent( i+1,j+1,k+1,Data_ints[i][j][k] );
 	      MHist->SetBinContent( i+1,j+1,k+1,MC_ints[i][j][k] );
-	      //      if(i<5 && j<5 && k<5) std::cout << Weight3D_[i][j][k] << " " ;    
+	      //      if(i<5 && j<5 && k<5) std::cout << Weight3D_[i][j][k] << " " ;
 	    }
-	    //      if(i<5 && j<5) std::cout << std::endl;        
+	    //      if(i<5 && j<5) std::cout << std::endl;
 	  }
 	}
 
@@ -501,24 +502,24 @@ namespace reweight {
 	  outfile->Close();
 	  outfile->Delete();
 	}
-	
+
 	return;
       }
 
 
-      void weight3D_set( std::string WeightFileName ) { 
+      void weight3D_set( std::string WeightFileName ) {
 
 	TFile *infile = new TFile(WeightFileName.c_str());
 	TH1D *WHist = (TH1D*)infile->Get("WHist");
 
-	// Check if the histogram exists           
+	// Check if the histogram exists
 	if (!WHist) {
 	  std::cout << " Could not find the histogram WHist in the file "
 						    << "in the file " << WeightFileName << "." << std::endl;
 	  return;
 	}
 
-	for (int i=0; i<50; i++) {  
+	for (int i=0; i<50; i++) {
 	  for(int j=0; j<50; j++) {
 	    for(int k=0; k<50; k++) {
 	      Weight3D_[i][j][k] = WHist->GetBinContent(i,j,k);
@@ -655,8 +656,8 @@ namespace reweight {
 	  0.872272,
 	  0.76399
 	};
- 
- 
+
+
 	static double weight_20[25] = {
 	  0,
 	  0,
@@ -683,7 +684,7 @@ namespace reweight {
 	  0.865689,
 	  0.753288,
 	  0.62765
-	}; 
+	};
 	static double weight_19[25] = {
 	  0,
 	  0,
@@ -740,7 +741,7 @@ namespace reweight {
 	  0.350434
 	};
 
- 
+
 	static double weight_17[25] = {
 	  1.03634e-06,
 	  7.25437e-06,
@@ -769,7 +770,7 @@ namespace reweight {
 	  0.234332
 	};
 
- 
+
 	static double weight_16[25] = {
 	  4.03159e-06,
 	  2.41895e-05,
@@ -797,8 +798,8 @@ namespace reweight {
 	  0.216251,
 	  0.14561
 	};
- 
- 
+
+
 	static double weight_15[25] = {
 	  9.76084e-07,
 	  5.07564e-05,
@@ -826,8 +827,8 @@ namespace reweight {
 	  0.12951,
 	  0.0808051
 	};
- 
- 
+
+
 	static double weight_14[25] = {
 	  1.13288e-05,
 	  0.000124617,
@@ -856,7 +857,7 @@ namespace reweight {
 	  0.0406496
 	};
 
- 
+
 	static double weight_13[25] = {
 	  2.54296e-05,
 	  0.000261561,
@@ -913,7 +914,7 @@ namespace reweight {
 	  0.00696683
 	};
 
- 
+
 	static double weight_11[25] = {
 	  0.00015238,
 	  0.00156064,
@@ -970,7 +971,7 @@ namespace reweight {
 	  0.000568796
 	};
 
- 
+
 	static double weight_9[25] = {
 	  0.00093396,
 	  0.00854448,
@@ -999,7 +1000,7 @@ namespace reweight {
 	  0.000111529
 	};
 
- 
+
 	static double weight_8[25] = {
 	  0.00240233,
 	  0.0192688,
@@ -1055,7 +1056,7 @@ namespace reweight {
 	  7.38398e-06,
 	  6.71271e-07
 	};
- 
+
 	static double weight_6[25] = {
 	  0.0154465,
 	  0.0923472,
@@ -1083,8 +1084,8 @@ namespace reweight {
 	  6.21938e-07,
 	  0
 	};
- 
- 
+
+
 	static double weight_5[25] = {
 	  0.0382845,
 	  0.191122,
@@ -1112,8 +1113,8 @@ namespace reweight {
 	  0,
 	  0
 	};
- 
- 
+
+
 	static double weight_4[25] = {
 	  0.0941305,
 	  0.373824,
@@ -1141,8 +1142,8 @@ namespace reweight {
 	  0,
 	  0
 	};
- 
- 
+
+
 	static double weight_3[25] = {
 	  0.222714,
 	  0.667015,
@@ -1170,7 +1171,7 @@ namespace reweight {
 	  0,
 	  0
 	};
- 
+
 	static double weight_2[25] = {
 	  0.499541,
 	  0.999607,
@@ -1198,7 +1199,7 @@ namespace reweight {
 	  0,
 	  0
 	};
- 
+
 	static double weight_1[25] = {
 	  0.999165,
 	  1,
@@ -1226,7 +1227,7 @@ namespace reweight {
 	  0,
 	  0
 	};
- 
+
 	static double weight_0[25] = {
 	  1,
 	  0,
@@ -1352,7 +1353,7 @@ namespace reweight {
 	  0,
 	  0,
 	  0
-	};                        
+	};
 
 
 	if(FirstWarning_) {
@@ -1366,8 +1367,8 @@ namespace reweight {
 
 
 	// Note: for the "uncorrelated" out-of-time pileup, reweighting is only done on the 50ns
-	// "late" bunch (BX=+1), since that is basically the only one that matters in terms of 
-	// energy deposition.  
+	// "late" bunch (BX=+1), since that is basically the only one that matters in terms of
+	// energy deposition.
 
 	if(npv_in_time < 0) {
 	  std::cerr << " no in-time beam crossing found\n! " ;
@@ -1391,7 +1392,7 @@ namespace reweight {
 
 
 	return TotalWeight;
- 
+
       }
 
   protected:
@@ -1404,7 +1405,7 @@ namespace reweight {
       TFile *dataFile_;
       TH1D  *weights_;
 
-      //keep copies of normalized distributions:                                                                                  
+      //keep copies of normalized distributions:
       TH1D*      MC_distr_;
       TH1D*      Data_distr_;
 
