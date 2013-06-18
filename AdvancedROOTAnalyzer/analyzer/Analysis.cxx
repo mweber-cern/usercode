@@ -981,7 +981,8 @@ void Analysis::Loop()
 	   << info.fMemVirtual/1000. << " (virtual) ");
     }
     
-    Fill("runnumber", global_run);
+    FillNoWeight("runnumber", global_run);
+    FillNoWeight("pu_TrueNrInter", pu_TrueNrInter);
 
     //////////////////////////////////////////////////////////////////////
     // Dump event/object information, see Dump.cxx
@@ -1067,6 +1068,8 @@ void Analysis::Loop()
 
     Fill("cutflow", "evt&lumifilter");
     DEBUG("cutflow " << "evt&lumifilter");
+
+    Fill("bReweight_vtx_n", vtx_n);
 
     //////////////////////////////////////////////////////////////////////
     // pileup reweighting
@@ -1704,7 +1707,7 @@ void Analysis::CreateHistograms()
   const Int_t firstrun = 190000;
   const Int_t lastrun  = 220000;
   CreateHisto("runnumber", "Run number", lastrun-firstrun+1, firstrun, lastrun+1);
-
+  CreateHisto("pu_TrueNrInter", "# true pileup interactions", 60, 0, 60);
   // signal histograms
   CreateHisto("Sig_nElectron", "Signal MC truth: number of electrons in final state", 10, -0.5, 9.5);
   CreateHisto("Sig_nMuon", "Signal MC truth: number of muons in final state", 10, -0.5, 9.5);
@@ -1765,6 +1768,7 @@ void Analysis::CreateHistograms()
   CreateHisto("JER_scale", "(reco jet E - true jet E)/true jet E", 100, -2, 2);
 
   // Reskimming
+  CreateHisto("bReweight_vtx_n", "Number of vertices in event", 100, -0.5, 99.5);
   CreateHisto("bSkim_muo_n", "Number of muons", 10, -0.5, 9.5);
   CreateHisto("bSkim_muo_pt0", "pt of leading muon", 500, 0, 500);
   CreateHisto("bSkim_muo_pt1", "pt of second muon", 500, 0, 500);
