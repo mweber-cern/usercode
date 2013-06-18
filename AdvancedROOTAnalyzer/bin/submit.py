@@ -1,5 +1,6 @@
 #!/bin/env python
 import os
+import errno
 import sys
 import ConfigParser
 import optparse
@@ -18,6 +19,14 @@ def getType(job):
         return "background"
     else:
         return "mc"
+
+def mkdir_p(path):
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else: raise
 
 ######################################################################
 # submitters
@@ -94,7 +103,7 @@ def submit(jobgroup, job, period):
     # create directory
     basedir = ara.config.get('Analysis', 'basedir').rstrip('/')
     myDir = basedir + '/' + options.selection + '/' + period
-    os.system("mkdir -p " + myDir)
+    mkdir_p(myDir)
 
     # need to go into this directory - submit job from there, output will get here
     os.chdir(myDir)
