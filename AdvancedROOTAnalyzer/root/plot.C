@@ -23,7 +23,9 @@ Int_t           gMaxProcess = 0;
 TCanvas       * gCanvas = 0;
 Int_t           nPad = 0;
 Bool_t          gGerman = kFALSE;
+const char *    gLegendTitle = 0;
 Bool_t          gAutoOrder = kTRUE;
+Double_t        gAutoZoom = 1E-3;
 Int_t           gMaxPeriod = 0;
 TString         gStage = "0";
 Int_t           gPadNr = 0;
@@ -249,15 +251,15 @@ void read_config_files(const char * configFileName = "plot.cfg")
   THashList * gTable = (THashList *) gConfig->GetTable();
   TIter next(gTable);
   TEnvRec * obj = 0;
-  
+
   // number of data taking periods, backgrounds, signals
   bool signalToggle = false;
   TString processName = "toast";
   vector<TString> periods;
   vector<TString> backgrounds;
   vector<TString> signals;
- 
-  
+
+
 
   while ( (obj = (TEnvRec *) next()) ) {
     TString objName = obj->GetName();
@@ -282,7 +284,7 @@ void read_config_files(const char * configFileName = "plot.cfg")
 
     // count signals and periods
     if (!objName.BeginsWith(processName+'.')) {
-      
+
       TObjArray * objStrArr = (TObjArray *) objName.Tokenize(".");
       TObjString * objStrEle = (TObjString *) objStrArr->At(0);
       processName = objStrEle->GetString();
@@ -336,7 +338,7 @@ void read_config_files(const char * configFileName = "plot.cfg")
 
   // number of processes
   gMaxProcess = N_bg + gMaxSignal + 1;
-  
+
   // create and initialize arrays depending on gMaxProcess
   for (Int_t pad = 0; pad < gMaxPad; pad++) {
     gHisto[pad]  = new TH1D * [gMaxProcess];
@@ -417,7 +419,7 @@ void read_config_files(const char * configFileName = "plot.cfg")
       gProcessInfo[period][process].xs = gConfig->GetValue(Form("%s.%s.xs", gProcess[process].fname, gPeriod[period]), gOptDefault);
       gProcessInfo[period][process].Nev = gConfig->GetValue(Form("%s.%s.Nev", gProcess[process].fname, gPeriod[period]), -1);
       gProcessInfo[period][process].weight = gConfig->GetValue(Form("%s.%s.weight", gProcess[process].fname, gPeriod[period]), 1.);
-      
+
       DEBUG("Nev    = " << gProcessInfo[period][process].Nev);
       DEBUG("xs     = " << gProcessInfo[period][process].xs);
       DEBUG("weight = " << gProcessInfo[period][process].weight);
@@ -558,6 +560,7 @@ void read_config_file(const char * configFileName = "Overview.cfg")
 
   // misc setup
   gBase = strdup_new(gConfig->GetValue("basedir", "."));
+  gLegendTitle = gConfig->GetValue("legend", (const char *) 0);
 }
 
 // read all cross-section and luminosity information
@@ -585,7 +588,7 @@ void read_xs_and_lumi()
       gProcessInfo[period][process].weight = config->GetValue(Form("%s.weight",
 							       gProcess[process].fname),
 							  1.);
-      
+
       DEBUG("Nev    = " << gProcessInfo[period][process].Nev);
       DEBUG("xs     = " << gProcessInfo[period][process].xs);
       DEBUG("weight = " << gProcessInfo[period][process].weight);
@@ -765,7 +768,7 @@ void MakeCanvas2(Int_t dy, Double_t percent = 0.8)
 
 void padupdate()
 {
-  if (gPad == 0) 
+  if (gPad == 0)
     return;
   gPad->Modified();
   gPad->Update();
@@ -1031,7 +1034,7 @@ const char * GetYTitle(const TH1D * histo)
     strncpy(ttitle, histo->GetTitle(), len);
     ttitle[len] = '\0';
     DEBUG("y title after cutting x-part away: " << ttitle);
-    
+
     // find if it contains a unit
     const char * unit = GetUnit(ttitle);
     if (unit) {
@@ -1176,9 +1179,9 @@ void drawoverflow()
 {
   if (!gHasOverflow[gPadNr] || !gMoveOverflow)
     return;
-  
+
   Double_t lmax = -1E99;
-  Double_t bw = 0;
+  // Double_t bw = 0;
   Double_t xmax = 0, xmin = 0, ymin = 0;
   // find maximum in the overflow bin
   for (Int_t process = 0; process < gMaxProcess; process++) {
@@ -1187,7 +1190,7 @@ void drawoverflow()
       continue;
     Int_t bin  = h->GetNbinsX();
     lmax = TMath::Max(lmax, gStack[gPadNr][process]->GetBinContent(bin));
-    bw   = h->GetBinWidth(bin);
+    // bw   = h->GetBinWidth(bin);
     xmax = h->GetXaxis()->GetXmax();
     xmin = h->GetXaxis()->GetXmin();
     ymin = h->GetYaxis()->GetXmin();
@@ -1206,205 +1209,92 @@ void drawoverflow()
   t->Draw();
 }
 
-void draw(Bool_t autotitle = kTRUE)
+// automatically zoom
+void auto_zoom()
 {
-  DEBUG("enter draw()");
+  DEBUG("enter auto_zoom");
+  if (gAutoZoom < 0)
+    return;
 
-  // draw the histograms in the canvas
-  Bool_t first = kTRUE;   // needed for drawing first histogram without "same"
+  // get initial ranges from first histogram found
+  Int_t hstart = FindFirstHisto();
+  if (hstart < 0)
+    return;
+  TH1D * h = gStack[gPadNr][hstart];
+  Double_t xmax = h->GetXaxis()->GetXmax();
+  Double_t xmin = h->GetYaxis()->GetXmin();
+  DEBUG("initial range: " << xmin << " ... " << xmax);
 
-  // clear drawing pad and delete histograms
-  if (gPad) {
-    gPad->cd();
-    gPad->Clear();
-  }
-  else {
-    MakeCanvas();
-  }
-
-  // enable or disable grid in x and/or y
-  gPad->SetGridy((gGrid / 10) % 10);
-  gPad->SetGridx(gGrid % 10);
-
-  // now draw all stacked histograms in canvas
-  TH1D * histo = 0;
-  for (Int_t i = 0; i < gMaxProcess-1; i++) {
-    Int_t process = gOrder[gPadNr][i];
-    DEBUG("process " << process << " [" << gProcess[process].fname << "]");
-    histo = gStack[gPadNr][process];
-    if (histo == 0)
-      continue;
-
-    histo->SetLineStyle(gProcess[process].lstyle);
-    histo->SetLineColor(gProcess[process].lcolor);
-
-    // only draw stacked histograms in first loop
-    if (!gProcess[process].stack)
-      continue;
-    DEBUG("stacked histogram");
-    if (gIsColor) {
-      histo->SetFillStyle(1001);
-      histo->SetFillColor(gProcess[process].fcolor);
-    }
-    else {
-      // delete old shadow histogram
-      TH1D * shadow = gShadow[gPadNr][process];
-      if (shadow) {
-	delete shadow;
-      }
-      shadow = new TH1D(*histo);
-      shadow->SetFillStyle(1001);
-      shadow->SetFillColor(kWhite);
-      shadow->Draw("same");
-      histo->SetFillStyle(gProcess[process].hstyle);
-      histo->SetFillColor(gProcess[process].hcolor);
-    }
-    if (first) {
-      if (gProcess[process].join) {
-	ERROR("first process to be drawn (" << gProcess[process].fname 
-	      << ") has option 'join'");
-      }
-      DEBUG("draw first");
-      // draw first
-      if (autotitle) {
-	histo->SetXTitle(GetXTitle(histo));
-	histo->SetYTitle(GetYTitle(histo));
-      }
-      setopt(histo);
-      histo->Draw("histo");
-      histo->GetXaxis()->CenterTitle();
-      histo->GetYaxis()->CenterTitle(kFALSE);
-      first = kFALSE;
-      DEBUG("end draw first");
-    }
-    else {
-      // draw others, but only if not joined
-      if (!gProcess[process].join) {
-	DEBUG("draw");
-	histo->Draw("histosame");
-      }
-    }
-  }
-
-  // draw unstacked histograms as lines, also draw data
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    Int_t process = gOrder[gPadNr][i];
-    LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
-    // does the histogram exist?
-    histo = gStack[gPadNr][process];
-    if (histo == 0)
-      continue;
-    // ignore stacked histograms
-    if (gProcess[process].stack)
-      continue;
-
-    if (process == gMaxProcess - 1) {
-      // data
-      DEBUG("data");
-      histo->SetMarkerStyle(gProcess[process].marker);
-      histo->SetMarkerColor(gProcess[process].mcolor);
-      histo->SetMarkerSize(gProcess[process].msize);
-    }
-    else {
-      histo->SetLineWidth(2);
-    }
-
-    DEBUG("unstacked histogram");
-    if (first) {
-      if (gProcess[process].join) {
-	ERROR("first process to be drawn (" << gProcess[process].fname 
-	      << ") has option 'join'");
-      }
-      // draw first
-      DEBUG("draw unstacked first");
-      if (autotitle) {
-	histo->SetXTitle(GetXTitle(histo));
-	histo->SetYTitle(GetYTitle(histo));
-      }
-      setopt(histo);
-      if (process == gMaxProcess-1)
-	histo->Draw("e1p");
-      else
-	histo->Draw("histo");
-      histo->GetXaxis()->CenterTitle();
-      histo->GetYaxis()->CenterTitle(kFALSE);
-      first = kFALSE;
-      DEBUG("end draw unstacked first");
-    }
-    else {
-      if (process == gMaxProcess-1) {
-	// draw data
-	DEBUG("draw data");
-	histo->Draw("e1psame");
-      } 
-      else {
-	// draw others, but only if not joined
-	if (!gProcess[process].join) {
-	  DEBUG("draw");
-	  histo->Draw("histosame");
+  // find upper range, loop over all bins from this histogram
+  Int_t maxbin = h->GetNbinsX();
+  DEBUG("maxbin = " << maxbin);
+  Bool_t stop = kFALSE;
+  for (Int_t bin = maxbin; bin > 0; bin--) {
+    for (Int_t process = 0; process < gMaxProcess; process++) {
+      TH1D * h1 = gStack[gPadNr][process];
+      if (h1) {
+	if (h1->GetBinContent(bin) > gAutoZoom) {
+	  DEBUG("Exceeded limit " << gAutoZoom
+		<< " with value " << h1->GetBinContent(bin)
+		<< " in bin " << bin
+		<< " for process " << process);
+	  stop = kTRUE;
+	  break;
 	}
       }
     }
-  }  
-
-  // draw cut (if it is there)
-  drawcut();
-  drawoverflow();
-  padupdate();
-  DEBUG("leave draw()");
+    // did the loop finish?
+    if (stop) {
+      DEBUG("Stopped");
+      break;
+    }
+    else {
+      xmax = h->GetXaxis()->GetBinLowEdge(bin);
+      DEBUG("Lowering xmax to " << xmax);
+    }
+  }
+  // find bin on x axis from below
+  stop = kFALSE;
+  for (Int_t bin = 1; bin < maxbin; bin++) {
+    for (Int_t process = 0; process < gMaxProcess; process++) {
+      TH1D * h1 = gStack[gPadNr][process];
+      if (h1) {
+	if (h1->GetBinContent(bin) > gAutoZoom) {
+	  DEBUG("Exceeded limit " << gAutoZoom
+		<< " with value " << h1->GetBinContent(bin)
+		<< " in bin " << bin
+		<< " for process " << process);
+	  stop = kTRUE;
+	  break;
+	}
+      }
+    }
+    // did the loop finish?
+    if (stop) {
+      DEBUG("Stopped");
+      break;
+    }
+    else {
+      xmin = h->GetXaxis()->GetBinLowEdge(bin);
+      DEBUG("Raising xmin to " << xmax);
+    }
+  }
+  DEBUG("final range: " << xmin << " ... " << xmin);
+  zoom(xmin, xmax);
+  DEBUG("leave auto_zoom");
 }
 
-void max(Double_t maximum)
+// set automatic zoom to given threshold (-1 turns off)
+void autozoom(double threshold)
 {
-  // set maximum for all histograms
-  FindFirstHisto();
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gStack[gPadNr][i] != 0)
-      gStack[gPadNr][i]->SetMaximum(maximum);
-  }
-  padupdate();
+  gAutoZoom = threshold;
+  auto_zoom();
 }
 
-void min(Double_t minimum)
+// turn off automatic zoom
+void noautozoom()
 {
-  DEBUG("enter min()");
-  // set minimum for all histograms
-  if (gPad && gPad->GetLogy() && minimum <= 0) {
-    ERROR("Can not set minimum " << minimum << " with logarithmic y-axis");
-    return;
-  }
-  FindFirstHisto();
-  for (Int_t i = 0; i < gMaxProcess; i++) {
-    if (gStack[gPadNr][i] != 0)
-      gStack[gPadNr][i]->SetMinimum(minimum);
-  }
-  padupdate();
-  DEBUG("leave min()");
-}
-
-void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin)
-{
-  DEBUG("enter findbins");
-  // returns the bin numbers to the corresponding x-axis values. If xlow==xup,
-  // then the full range is returned
-
-  // find first histo
-  Int_t hstart = FindFirstHisto();
-  if (hstart < 0) {
-    startbin = 1;
-    endbin = 1;
-    return;
-  }
-
-  // full range?
-  if (xlow == xup) {
-    startbin = 1;
-    endbin   = gStack[gPadNr][hstart]->GetNbinsX();
-  }
-  else {
-    startbin = gStack[gPadNr][hstart]->GetXaxis()->FindFixBin(xlow);
-    endbin   = gStack[gPadNr][hstart]->GetXaxis()->FindFixBin(xup);
-  }
+  autozoom(-1);
 }
 
 void findmax(Double_t low = 0, Double_t up = 0)
@@ -1467,6 +1357,220 @@ void findmin(Double_t low = 0, Double_t up = 0)
 
   min(lmin);
   DEBUG("leaved findmin()");
+}
+
+void draw(Bool_t autotitle = kTRUE)
+{
+  DEBUG("enter draw()");
+
+  // draw the histograms in the canvas
+  Bool_t first = kTRUE;   // needed for drawing first histogram without "same"
+
+  // clear drawing pad and delete histograms
+  if (gPad) {
+    gPad->cd();
+    gPad->Clear();
+  }
+  else {
+    MakeCanvas();
+  }
+
+  // enable or disable grid in x and/or y
+  gPad->SetGridy((gGrid / 10) % 10);
+  gPad->SetGridx(gGrid % 10);
+
+  // now draw all stacked histograms in canvas
+  TH1D * histo = 0;
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    DEBUG("process " << process << " [" << gProcess[process].fname << "]");
+    histo = gStack[gPadNr][process];
+    if (histo == 0)
+      continue;
+
+    histo->SetLineStyle(gProcess[process].lstyle);
+    histo->SetLineColor(gProcess[process].lcolor);
+
+    // only draw stacked histograms in first loop
+    if (!gProcess[process].stack)
+      continue;
+    DEBUG("stacked histogram");
+    if (gIsColor) {
+      histo->SetFillStyle(1001);
+      histo->SetFillColor(gProcess[process].fcolor);
+    }
+    else {
+      // delete old shadow histogram
+      TH1D * shadow = gShadow[gPadNr][process];
+      if (shadow) {
+	delete shadow;
+      }
+      shadow = new TH1D(*histo);
+      shadow->SetFillStyle(1001);
+      shadow->SetFillColor(kWhite);
+      shadow->Draw("same");
+      histo->SetFillStyle(gProcess[process].hstyle);
+      histo->SetFillColor(gProcess[process].hcolor);
+    }
+    if (first) {
+      if (gProcess[process].join) {
+	ERROR("first process to be drawn (" << gProcess[process].fname
+	      << ") has option 'join'");
+      }
+      DEBUG("draw first");
+      // draw first
+      if (autotitle) {
+	histo->SetXTitle(GetXTitle(histo));
+	histo->SetYTitle(GetYTitle(histo));
+      }
+      setopt(histo);
+      histo->Draw("histo");
+      histo->GetXaxis()->CenterTitle();
+      histo->GetYaxis()->CenterTitle(kFALSE);
+      first = kFALSE;
+      DEBUG("end draw first");
+    }
+    else {
+      // draw others, but only if not joined
+      if (!gProcess[process].join) {
+	DEBUG("draw");
+	histo->Draw("histosame");
+      }
+    }
+  }
+
+  // draw unstacked histograms as lines, also draw data
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    Int_t process = gOrder[gPadNr][i];
+    LOG(10, "process " << process << " [" << gProcess[process].fname << "]");
+    // does the histogram exist?
+    histo = gStack[gPadNr][process];
+    if (histo == 0)
+      continue;
+    // ignore stacked histograms
+    if (gProcess[process].stack)
+      continue;
+
+    if (process == gMaxProcess - 1) {
+      // data
+      DEBUG("data");
+      histo->SetMarkerStyle(gProcess[process].marker);
+      histo->SetMarkerColor(gProcess[process].mcolor);
+      histo->SetMarkerSize(gProcess[process].msize);
+    }
+    else {
+      histo->SetLineWidth(2);
+    }
+
+    DEBUG("unstacked histogram");
+    if (first) {
+      if (gProcess[process].join) {
+	ERROR("first process to be drawn (" << gProcess[process].fname
+	      << ") has option 'join'");
+      }
+      // draw first
+      DEBUG("draw unstacked first");
+      if (autotitle) {
+	histo->SetXTitle(GetXTitle(histo));
+	histo->SetYTitle(GetYTitle(histo));
+      }
+      setopt(histo);
+      if (process == gMaxProcess-1)
+	histo->Draw("e1p");
+      else
+	histo->Draw("histo");
+      histo->GetXaxis()->CenterTitle();
+      histo->GetYaxis()->CenterTitle(kFALSE);
+      first = kFALSE;
+      DEBUG("end draw unstacked first");
+    }
+    else {
+      if (process == gMaxProcess-1) {
+	// draw data
+	DEBUG("draw data");
+	histo->Draw("e1psame");
+      }
+      else {
+	// draw others, but only if not joined
+	if (!gProcess[process].join) {
+	  DEBUG("draw");
+	  histo->Draw("histosame");
+	}
+      }
+    }
+  }
+
+  // automatic zoom
+  auto_zoom();
+
+  // find maximum and minimum
+  findmax();
+  findmin();
+
+  // draw cut (if it is there)
+  drawcut();
+
+  // draw overflow information
+  drawoverflow();
+
+  // update pad
+  padupdate();
+  DEBUG("leave draw()");
+}
+
+void max(Double_t maximum)
+{
+  // set maximum for all histograms
+  FindFirstHisto();
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    if (gStack[gPadNr][i] != 0)
+      gStack[gPadNr][i]->SetMaximum(maximum);
+  }
+  drawcut();
+  padupdate();
+  DEBUG("leave max()");
+}
+
+void min(Double_t minimum)
+{
+  DEBUG("enter min()");
+  // set minimum for all histograms
+  if (gPad && gPad->GetLogy() && minimum <= 0) {
+    ERROR("Can not set minimum " << minimum << " with logarithmic y-axis");
+    return;
+  }
+  FindFirstHisto();
+  for (Int_t i = 0; i < gMaxProcess; i++) {
+    if (gStack[gPadNr][i] != 0)
+      gStack[gPadNr][i]->SetMinimum(minimum);
+  }
+  padupdate();
+  DEBUG("leave min()");
+}
+
+void findbins(Double_t xlow, Double_t xup, Int_t & startbin, Int_t & endbin)
+{
+  DEBUG("enter findbins");
+  // returns the bin numbers to the corresponding x-axis values. If xlow==xup,
+  // then the full range is returned
+
+  // find first histo
+  Int_t hstart = FindFirstHisto();
+  if (hstart < 0) {
+    startbin = 1;
+    endbin = 1;
+    return;
+  }
+
+  // full range?
+  if (xlow == xup) {
+    startbin = 1;
+    endbin   = gStack[gPadNr][hstart]->GetNbinsX();
+  }
+  else {
+    startbin = gStack[gPadNr][hstart]->GetXaxis()->FindFixBin(xlow);
+    endbin   = gStack[gPadNr][hstart]->GetXaxis()->FindFixBin(xup);
+  }
 }
 
 void zoom(Double_t low, Double_t up)
@@ -1686,6 +1790,7 @@ void logy()
   min(0.001);
   gPad->SetLogy(1);
   draw();
+  padupdate();
   DEBUG("leave logy()");
 }
 
@@ -1699,6 +1804,7 @@ void liny()
     MakeCanvas();
   gPad->SetLogy(0);
   min(0.);
+  drawcut();
   padupdate();
 }
 
@@ -1847,7 +1953,7 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
   }
   Double_t minx, maxx;
   if (posi > 0) {
-    minx = 0.720; 
+    minx = 0.720;
     maxx = 0.92;
   }
   else if (posi < 0) {
@@ -1858,7 +1964,7 @@ void legend(Double_t mincontent, Int_t posi, Double_t miny)
     minx = 0.45;
     maxx = 0.69;
   }
-  t[gPadNr] = new TLegend(minx, miny, maxx, 0.92);
+  t[gPadNr] = new TLegend(minx, miny, maxx, 0.92, gLegendTitle);
   setopt(t[gPadNr]);
   for (Int_t i = 0; i < (Int_t) entries.size(); i++) {
     Int_t process = entries[i];
@@ -1949,8 +2055,8 @@ void DeleteOld()
 //       if (s != hname)
 // 	continue;
 //       DEBUG(key->GetClassName() << ": " << key->GetName());
-//       if (strcmp(key->GetClassName(), "TH1D") && 
-// 	  strcmp(key->GetClassName(), "TH2D") && 
+//       if (strcmp(key->GetClassName(), "TH1D") &&
+// 	  strcmp(key->GetClassName(), "TH2D") &&
 // 	  strcmp(key->GetClassName(), "TH3D")) {
 // 	ERROR("Can not work with class " << key->GetClassName());
 // 	if (hadd)
@@ -2104,12 +2210,12 @@ void auto_order()
   DEBUG("Enter auto_order()");
   Double_t integral[gMaxProcess];
   // order all but data
-  for (Int_t i = gMaxSignal; i < gMaxProcess-1; i++) {
+  for (Int_t i = 0; i < gMaxProcess-1; i++) {
     integral[i] = 0;
     if (!gHisto[gPadNr][i]) {
       continue;
     }
-    // is it already joined? 
+    // is it already joined?
     if (gProcess[i].join && i > 0) {
       // if it is a joined histogram, keep it below its parent
       integral[i] = integral[i-1]*0.999999;
@@ -2133,7 +2239,7 @@ void auto_order()
     }
     DEBUG(gProcess[i].fname << ": " << integral[i]);
   }
-  TMath::Sort(gMaxProcess-1-gMaxSignal, integral, gOrder[gPadNr]);
+  TMath::Sort(gMaxProcess-1, integral, gOrder[gPadNr]);
   DEBUG("leave auto_order()");
 }
 
@@ -2165,9 +2271,7 @@ void plot(const char * hname, const char * selection,
     auto_order();
   // compose histograms for drawing
   compose();
-  // find maximum & minimum
-  findmax();
-  findmin();
+  // and draw
   draw();
 }
 
@@ -2491,12 +2595,12 @@ TH1D * getHisto(const char * name, bool match, int min, int max)
 {
   // sum up all histograms that match the given name, starting from min up to
   // (but not including) max.
-  // 
+  //
   // If match is true all individual signal histograms whose file name
   // contains "name" are summed up. If match is false, all individual signal
   // histograms but those whose file name matches "name" are taken. If name ==
-  // 0, all histograms are taken.  
-  // 
+  // 0, all histograms are taken.
+  //
   // Can be used e.g. for fitting (see xsection.C)
 
   TH1D * hMC = 0;
@@ -2526,12 +2630,12 @@ TH2D * getHisto2(const char * name, bool match, int min, int max)
 {
   // sum up all histograms that match the given name, starting from min up to
   // (but not including) max.
-  // 
+  //
   // If match is true all individual signal histograms whose file name
   // contains "name" are summed up. If match is false, all individual signal
   // histograms but those whose file name matches "name" are taken. If name ==
-  // 0, all histograms are taken.  
-  // 
+  // 0, all histograms are taken.
+  //
   // Can be used e.g. for fitting (see xsection.C)
 
   TH2D * hMC = 0;

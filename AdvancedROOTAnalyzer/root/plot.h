@@ -169,6 +169,8 @@ void liny();
 void logy();
 void grid(Int_t xy = 11); // turn on grid in plots (10 => X, 1 => Y)
 void nogrid(); // turn off grid in plots
+void autozoom(double threshold = 1E-3); // set automatic zoom to given threshold (-1 turns off)
+void noautozoom(); // turn off automatic zoom
 void rebin(Int_t nbins);
 void legend(Double_t mincontent = 0.01, Int_t posi = 1, Double_t miny = -1);
 TArrow * arrow(Double_t position, Int_t neighbourbins = 0);

@@ -36,12 +36,12 @@ void compare_pileup_histograms()
   hdata->SetFillStyle(0);
   hdata->DrawNormalized("lsame");
 
-  f = TFile::Open("/user/mweber/test/2012/signal_fullsim_m0_eq_1000_m12_eq_300.root");
+  f = TFile::Open("/user/mweber/fullsim/2012/signal_fullsim_m0_eq_1000_m12_eq_1200.root");
   TH1D * hfullsim = (TH1D * ) f->Get("h1_0_pu_TrueNrInter");
   hfullsim->SetMarkerStyle(22);
   hfullsim->DrawNormalized("epsame");
 
-  f = TFile::Open("/user/mweber/test/2012/signal_fastsim_m0_eq_1000_m12_eq_300.root");
+  f = TFile::Open("/user/mweber/fastsim/2012/signal_fastsim_m0_eq_1000_m12_eq_1200.root");
   TH1D * hfastsim = (TH1D * ) f->Get("h1_0_pu_TrueNrInter");
   hfastsim->SetMarkerStyle(23);
   hfastsim->DrawNormalized("epsame");
